@@ -1,8 +1,11 @@
 import { useCallback, useRef } from "react"
-import { LocateFixedIcon } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Button } from "@/components/ui/button"
-import { Map, MapMarker, type MapRef } from "@/components/ui/map"
+import {
+  Map,
+  MapMarker,
+  MapControls,
+  type MapRef,
+} from "@/components/ui/map"
 import { isValidPosition, loadAmapConfig } from "@/lib/amap"
 
 export function AmapMap({
@@ -17,8 +20,8 @@ export function AmapMap({
   const config = loadAmapConfig()
   const isConfigured = Boolean(config.key && config.securityJsCode)
 
-  const handleLocate = useCallback(() => {
-    const map = mapRef.current?.map
+  const handleVehicleLocate = useCallback(() => {
+    const map = mapRef.current
     if (!map) return
     map.setCenter([longitude, latitude])
     map.setZoom(16)
@@ -60,16 +63,15 @@ export function AmapMap({
           <MapMarker longitude={longitude} latitude={latitude}>
             <></>
           </MapMarker>
+          <MapControls
+            showZoom
+            showLocate
+            showScale
+            position="bottom-right"
+            locateFn={handleVehicleLocate}
+            locateLabel="回到车辆位置"
+          />
         </Map>
-        <Button
-          variant="secondary"
-          size="icon-sm"
-          className="absolute right-2 top-2 z-10 shadow-sm"
-          onClick={handleLocate}
-          aria-label="回到车辆位置"
-        >
-          <LocateFixedIcon />
-        </Button>
       </div>
     </div>
   )

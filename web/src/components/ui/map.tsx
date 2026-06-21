@@ -738,6 +738,10 @@ type MapControlsProps = {
   showScale?: boolean;
   className?: string;
   onLocate?: (coords: { longitude: number; latitude: number }) => void;
+  /** When set, replaces default browser geolocation — called when locate button is clicked. */
+  locateFn?: () => void;
+  /** Accessible label for the locate button (default: "Find my location") */
+  locateLabel?: string;
 };
 
 const positionClasses = {
@@ -851,12 +855,18 @@ function MapControls({
   showScale = false,
   className,
   onLocate,
+  locateFn,
+  locateLabel = "Find my location",
 }: MapControlsProps) {
   const { map, isLoaded } = useMap();
   const [waitingForLocation, setWaitingForLocation] = useState(false);
   const onLocateRef = useLatestRef(onLocate);
 
   const handleLocate = () => {
+    if (locateFn) {
+      locateFn();
+      return;
+    }
     if (!("geolocation" in navigator)) {
       setWaitingForLocation(false);
       return;
@@ -915,7 +925,7 @@ function MapControls({
         )}
         {showLocate && (
           <ControlGroup>
-            <ControlButton onClick={handleLocate} label="Find my location" disabled={waitingForLocation}>
+            <ControlButton onClick={handleLocate} label={locateLabel} disabled={waitingForLocation}>
               {waitingForLocation ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
