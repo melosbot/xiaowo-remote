@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package services.vehiclestates.precleaning;
+
+service PreCleaningService {
+  rpc GetPreCleaning(GetPreCleaningReq) returns(stream GetPreCleaningResp) {}
+}
+
+message GetPreCleaningReq {
+  string vin = 2;
+}
+
+message TimeStamp {
+  int64 seconds = 1;
+  int32 nanos = 2;
+}
+
+message PreCleaningStatus {
+  TimeStamp timestamp = 1;
+  TimeStamp notification_timestamp = 2;
+  TimeStamp measurement_timestamp = 3;
+  TimeStamp last_completed_cleaning = 4;
+  bool last_completed_cleaning_valid = 5;
+  PreCleaningNotifType notification = 6;
+  TimeStamp cleaning_started = 7;
+  uint32 measurement_type = 8;
+  uint32 aqi = 9;
+  uint32 pm25 = 10;
+  uint32 sensor_status = 11;
+}
+
+message GetPreCleaningResp {
+  string vin = 2;
+  PreCleaningStatus data = 3;
+}
+
+enum PreCleaningNotifType {
+  PRE_CLEANING_NOTIFICATION_TYPE_NOREQ = 0;
+  PRE_CLEANING_NOTIFICATION_TYPE_NOWARN = 1;
+  PRE_CLEANING_NOTIFICATION_TYPE_DONE = 2;
+  PRE_CLEANING_NOTIFICATION_TYPE_ERR = 3;
+  PRE_CLEANING_NOTIFICATION_TYPE_INTRPT = 4;
+}

@@ -1,0 +1,117 @@
+syntax = "proto3";
+
+package invocation;
+
+service InvocationService {
+  rpc WindowControl(windowControlReq) returns(stream invocationCommResp) {}
+  rpc EngineStart(EngineStartReq) returns(stream invocationCommResp) {}
+  rpc HonkFlash(HonkFlashReq) returns(stream invocationCommResp) {}
+  rpc Lock(LockReq) returns (stream invocationCommResp) {}
+  rpc Unlock(UnlockReq) returns (stream invocationCommResp) {}
+  rpc TailgateControl(TailgateControlReq) returns (stream invocationCommResp) {}
+  rpc SunroofControl(SunroofControlReq) returns(stream invocationCommResp) {}
+  rpc PreCleaningStart(preCleaningStartReq) returns(stream invocationCommResp) {}
+  rpc PreCleaningStop(preCleaningStopReq) returns(stream invocationCommResp) {}
+  rpc UpdateStatus(UpdateStatusReq) returns(stream invocationCommResp) {}
+}
+
+message invocationHead{
+  string vin = 1;
+}
+
+enum invocationControlType {
+    UNSPECIFIED = 0;
+    OPEN = 1;
+    CLOSE = 2;
+}
+
+enum invocationStatus {
+  UNKNOWN_ERROR = 0;
+  SENT = 1;
+  CAR_OFFLINE = 2;
+  DELIVERED = 4;
+  DELIVERY_TIMEOUT = 5;
+  SUCCESS = 6;
+  RESPONSE_TIMEOUT = 7;
+  UNKNOWN_CAR_ERROR = 8;
+  NOT_ALLOWED_PRIVACY_ENABLED = 9;
+  NOT_ALLOWED_WRONG_USAGE_MODE = 10;
+  INVOCATION_SPECIFIC_ERROR = 11;
+  NOT_ALLOWED_CONFLICTING_INVOCATION = 12;
+}
+
+message invocationData {
+  string deviceid = 1;
+  string vin = 2;
+  invocationStatus status = 3;
+  string msg = 4;
+  int64 timestamp = 5;
+}
+
+message invocationCommResp {
+  invocationData data = 1;
+}
+
+message windowControlReq {
+  invocationHead head = 1;
+  invocationControlType openType = 2;
+}
+
+message EngineStartReq {
+  invocationHead head = 1;
+  bool isStart = 2;
+  int32 startDurationMin = 3;
+}
+
+enum HonkFlashType {
+  HONK_AND_FLASH = 0;
+  HONK = 1;
+  FLASH = 2;
+}
+
+message HonkFlashReq{
+  invocationHead head = 1;
+  HonkFlashType honkFlashType = 2;
+}
+
+enum LockType {
+    LOCK = 0;
+    LOCK_REDUCED_GUARD = 1;
+}
+
+message LockReq{
+  invocationHead  head = 1;
+  LockType lockType = 2;
+}
+
+enum UnlockType {
+  UNLOCK_UNSPECIFIED = 0;
+  TRUNK_ONLY = 1;
+}
+
+message UnlockReq {
+  invocationHead  head = 1;
+  UnlockType unlockType = 2;
+}
+
+message TailgateControlReq{
+  invocationHead head = 1;
+  invocationControlType type = 2;
+}
+
+message SunroofControlReq{
+  invocationHead head = 1;
+  invocationControlType type = 2;
+}
+
+message UpdateStatusReq{
+  invocationHead head = 1;
+}
+
+message preCleaningStartReq{
+  invocationHead head = 1;
+}
+
+message preCleaningStopReq{
+  invocationHead head = 1;
+}
