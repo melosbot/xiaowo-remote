@@ -1,10 +1,12 @@
-import { useState, type FormEvent } from "react"
+import { useState, useEffect, type FormEvent } from "react"
 import {
   LogOutIcon,
   RefreshCwIcon,
   LogInIcon,
   RotateCcwIcon,
   SaveIcon,
+  FlaskConicalIcon,
+  SendIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth"
@@ -12,10 +14,11 @@ import { useVehicleStatus } from "@/hooks/use-vehicle-status"
 import { loadCredentials } from "@/lib/api"
 import {
   clearAmapConfig,
-  hasStoredAmapConfig,
   loadAmapConfig,
   saveAmapConfig,
+  loadAmap,
 } from "@/lib/amap"
+import { loadTgConfig, saveTgConfig } from "@/lib/tg"
 import {
   Card,
   CardContent,
@@ -42,7 +45,7 @@ import {
 } from "@/components/ui/select"
 
 export function SettingsTab() {
-  const { sessionId, vehicles, selectedVin, phone, selectVin, login, logout } =
+  const { api, sessionId, vehicles, selectedVin, phone, selectVin, login, logout } =
     useAuth()
   const { loading: statusLoading, refresh, data } = useVehicleStatus()
   const [phoneInput, setPhoneInput] = useState(
@@ -53,11 +56,126 @@ export function SettingsTab() {
   )
   const [remember, setRemember] = useState(() => !!loadCredentials())
   const [submitting, setSubmitting] = useState(false)
-  const [amapKeyInput, setAmapKeyInput] = useState(() => loadAmapConfig().key)
-  const [amapSecurityInput, setAmapSecurityInput] = useState(
-    () => loadAmapConfig().securityJsCode
-  )
-  const [hasStoredAmap, setHasStoredAmap] = useState(hasStoredAmapConfig)
+  const [amapKeyInput, setAmapKeyInput] = useState("")
+  const [amapSecurityInput, setAmapSecurityInput] = useState("")
+  const [amapTesting, setAmapTesting] = useState(false)
+  const [amapSaving, setAmapSaving] = useState(false)
+
+  // ---- Telegram ----
+  const [tgToken, setTgToken] = useState("")
+  const [tgChatId, setTgChatId] = useState("")
+  const [tgSaving, setTgSaving] = useState(false)
+  const [tgTesting, setTgTesting] = useState(false)
+  const [tgTokenSaving, setTgTokenSaving] = useState(false)
+  const [tgStatus, setTgStatus] = useState<{
+    configured: boolean
+    tokenHint: string
+    source: "ui" | "env" | null
+  } | null>(null)
+  // 从服务端拉取设置（跟随账号）
+  useEffect(() => {
+    api.getTgStatus().then(setTgStatus).catch(() => {})
+    if (!sessionId) return
+    api
+      .getSettings(sessionId)
+      .then((s) => {
+        setAmapKeyInput(s.amapKey || "")
+        setAmapSecurityInput(s.amapSecurityCode || "")
+        setTgChatId(s.tgChatId || "")
+        // 同步到 localStorage，保持 amap.ts / tg.ts 兼容
+        if (s.amapKey || s.amapSecurityCode) {
+          saveAmapConfig({ key: s.amapKey, securityJsCode: s.amapSecurityCode })
+        }
+        if (s.tgChatId) saveTgConfig({ chatId: s.tgChatId })
+      })
+      .catch(() => {
+        // 服务端不可用时回退 localStorage
+        setAmapKeyInput(loadAmapConfig().key)
+        setAmapSecurityInput(loadAmapConfig().securityJsCode)
+        setTgChatId(loadTgConfig().chatId)
+      })
+  }, [api, sessionId])
+
+  const handleTgSetToken = async () => {
+    if (!tgToken.trim()) {
+      // 清空 → 回退环境变量
+      setTgTokenSaving(true)
+      try {
+        await api.setTgToken("")
+        const status = await api.getTgStatus()
+        setTgStatus(status)
+        toast.success(status.configured ? "已回退到环境变量配置" : "Bot Token 已清除")
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "操作失败")
+      } finally {
+        setTgTokenSaving(false)
+      }
+      return
+    }
+    setTgTokenSaving(true)
+    try {
+      const result = await api.setTgToken(tgToken.trim())
+      const status = await api.getTgStatus()
+      setTgStatus(status)
+      if (result.verified) {
+        toast.success(`Bot Token 已保存 · @${result.username}`)
+      } else {
+        toast.warning("Token 已保存到服务端，但 Telegram 验证未通过，请检查是否正确")
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "保存失败")
+    } finally {
+      setTgTokenSaving(false)
+    }
+  }
+
+  const handleAmapTest = async () => {
+    setAmapTesting(true)
+    try {
+      await loadAmap()
+      toast.success("高德地图配置有效，可以正常加载")
+    } catch {
+      toast.error("高德地图 Key 无效，请检查 Key 和安全密钥")
+    } finally {
+      setAmapTesting(false)
+    }
+  }
+
+  const handleTgSave = async () => {
+    if (!tgChatId.trim()) {
+      toast.error("请填写 Chat ID")
+      return
+    }
+    setTgSaving(true)
+    try {
+      saveTgConfig({ chatId: tgChatId.trim() })
+      // 持久化到服务端（跟随账号）+ 同步到轮询
+      if (sessionId) {
+        await api.saveSettings(sessionId, { tgChatId: tgChatId.trim() })
+      }
+      toast.success("Telegram Chat ID 已保存" + (sessionId ? "到账号" : ""))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "保存失败")
+    } finally {
+      setTgSaving(false)
+    }
+  }
+
+  const handleTgTest = async () => {
+    if (!tgChatId.trim()) {
+      toast.error("请先填写 Chat ID")
+      return
+    }
+    setTgTesting(true)
+    try {
+      await api.testTgPush(tgChatId.trim())
+      toast.success("测试消息已发送，请检查 Telegram")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "推送测试失败，请检查 Chat ID")
+    } finally {
+      setTgTesting(false)
+    }
+  }
 
   const handleLogin = async (e: FormEvent) => {
     e.preventDefault()
@@ -88,7 +206,7 @@ export function SettingsTab() {
     else toast.error("暂时无法刷新车辆状态，请稍后重试")
   }
 
-  const handleAmapSave = (e: FormEvent) => {
+  const handleAmapSave = async (e: FormEvent) => {
     e.preventDefault()
     const key = amapKeyInput.trim()
     const securityJsCode = amapSecurityInput.trim()
@@ -96,12 +214,19 @@ export function SettingsTab() {
       toast.error("请填写高德地图 Web 端 Key 和安全密钥")
       return
     }
+    setAmapSaving(true)
     try {
+      // 同步到 localStorage（amap.ts 依赖）
       saveAmapConfig({ key, securityJsCode })
-      setHasStoredAmap(true)
-      toast.success("高德地图配置已保存")
-    } catch {
-      toast.error("配置保存失败，请检查浏览器存储权限")
+      // 持久化到服务端（跟随账号）
+      if (sessionId) {
+        await api.saveSettings(sessionId, { amapKey: key, amapSecurityCode: securityJsCode })
+      }
+      toast.success("高德地图配置已保存" + (sessionId ? "到账号" : ""))
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "保存失败")
+    } finally {
+      setAmapSaving(false)
     }
   }
 
@@ -111,8 +236,7 @@ export function SettingsTab() {
       const config = loadAmapConfig()
       setAmapKeyInput(config.key)
       setAmapSecurityInput(config.securityJsCode)
-      setHasStoredAmap(false)
-      toast.success("已恢复环境中的高德地图配置")
+      toast.success("已恢复环境变量中的高德地图配置")
     } catch {
       toast.error("配置恢复失败，请检查浏览器存储权限")
     }
@@ -301,22 +425,115 @@ export function SettingsTab() {
               </Field>
             </FieldGroup>
           </CardContent>
-          <CardFooter className="grid grid-cols-2 gap-2">
-            {hasStoredAmap && (
-              <Button type="button" variant="outline" onClick={handleAmapReset}>
-                <RotateCcwIcon data-icon="inline-start" />
-                恢复默认
-              </Button>
-            )}
+          <CardFooter className="grid grid-cols-3 gap-2">
+            <Button type="button" variant="outline" onClick={handleAmapReset}>
+              <RotateCcwIcon data-icon="inline-start" />
+              恢复
+            </Button>
             <Button
-              type="submit"
-              className={hasStoredAmap ? undefined : "col-span-2"}
+              type="button"
+              variant="outline"
+              disabled={amapTesting}
+              onClick={handleAmapTest}
             >
-              <SaveIcon data-icon="inline-start" />
+              {amapTesting ? (
+                <Spinner data-icon="inline-start" />
+              ) : (
+                <FlaskConicalIcon data-icon="inline-start" />
+              )}
+              测试
+            </Button>
+            <Button type="submit" disabled={amapSaving}>
+              {amapSaving ? (
+                <Spinner data-icon="inline-start" />
+              ) : (
+                <SaveIcon data-icon="inline-start" />
+              )}
               保存
             </Button>
           </CardFooter>
         </form>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Telegram 推送</CardTitle>
+          <CardDescription>
+            离车告警通知。Bot Token 也可通过服务端环境变量
+            <code className="mx-1 text-xs">TG_BOT_TOKEN</code>
+            持久化配置。
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FieldGroup className="gap-4">
+            <Field>
+              <FieldLabel htmlFor="tg-token">Bot Token</FieldLabel>
+              <div className="flex gap-2">
+                <Input
+                  id="tg-token"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder={tgStatus?.configured ? tgStatus.tokenHint : "从 @BotFather 获取"}
+                  value={tgToken}
+                  onChange={(e) => setTgToken(e.target.value)}
+                />
+                <Button
+                  variant="outline"
+                  disabled={tgTokenSaving}
+                  onClick={handleTgSetToken}
+                  className="shrink-0"
+                >
+                  {tgTokenSaving ? <Spinner data-icon="inline-start" /> : null}
+                  {tgToken.trim() ? "保存" : tgStatus?.source === "ui" ? "清除" : "保存"}
+                </Button>
+              </div>
+            </Field>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Bot 状态</span>
+              {tgStatus?.configured ? (
+                <Badge variant="default">
+                  {tgStatus.source === "ui" ? "网页配置" : "环境变量"}
+                  {" · "}
+                  {tgStatus.tokenHint}
+                </Badge>
+              ) : (
+                <Badge variant="secondary">未配置</Badge>
+              )}
+            </div>
+            <Field>
+              <FieldLabel htmlFor="tg-chat-id">Chat ID</FieldLabel>
+              <Input
+                id="tg-chat-id"
+                inputMode="numeric"
+                placeholder="从 @userinfobot 获取"
+                value={tgChatId}
+                onChange={(e) => setTgChatId(e.target.value)}
+              />
+            </Field>
+          </FieldGroup>
+        </CardContent>
+        <CardFooter className="grid grid-cols-2 gap-2">
+          <Button
+            variant="outline"
+            disabled={tgTesting || !tgStatus?.configured}
+            onClick={handleTgTest}
+          >
+            {tgTesting ? (
+              <Spinner data-icon="inline-start" />
+            ) : (
+              <SendIcon data-icon="inline-start" />
+            )}
+            测试推送
+          </Button>
+          <Button disabled={tgSaving} onClick={handleTgSave}>
+            {tgSaving ? (
+              <Spinner data-icon="inline-start" />
+            ) : (
+              <SaveIcon data-icon="inline-start" />
+            )}
+            保存 Chat ID
+          </Button>
+        </CardFooter>
       </Card>
 
       <Card>

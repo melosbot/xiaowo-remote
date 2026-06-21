@@ -17,6 +17,7 @@ interface Session {
 
 const sessions = new Map<string, Session>();
 const phoneSessions = new Map<string, string>(); // phone → sessionId
+const notifyChatIds = new Map<string, string>(); // vin → tg chatId
 const KEEPALIVE_INTERVAL_MS = 1000 * 60 * 5;
 
 async function initSession(
@@ -144,6 +145,47 @@ export function destroySession(sessionId: string): void {
     phoneSessions.delete(s.phone);
     removePersistedSession(sessionId);
   }
+}
+
+// ---- 轮询告警 ----
+
+/** 返回所有活跃 session 的轮询目标（vin + controller） */
+export function getActivePollingTargets(): Array<{
+  vin: string;
+  getExterior: () => ReturnType<
+    import("./volvo/vehicle.js").VehicleController["getExteriorSnapshot"]
+  >;
+}> {
+  const targets: Array<{
+    vin: string;
+    getExterior: () => ReturnType<
+      import("./volvo/vehicle.js").VehicleController["getExteriorSnapshot"]
+    >;
+  }> = [];
+  for (const [, s] of sessions) {
+    for (const [vin, ctrl] of s.vehicles) {
+      targets.push({
+        vin,
+        getExterior: () => ctrl.getExteriorSnapshot(),
+      });
+    }
+  }
+  return targets;
+}
+
+/** 保存 TG 通知 Chat ID（按 VIN 索引） */
+export function setNotifyChatId(vin: string, chatId: string): void {
+  notifyChatIds.set(vin, chatId);
+}
+
+/** 查询 VIN 对应的 TG Chat ID */
+export function getNotifyChatIdForVin(vin: string): string | null {
+  return notifyChatIds.get(vin) ?? null;
+}
+
+/** 获取 session 对应的手机号 */
+export function getSessionPhone(sessionId: string): string | null {
+  return sessions.get(sessionId)?.phone ?? null;
 }
 
 export class SessionError extends Error {}

@@ -39,6 +39,8 @@ export interface VehicleStatus {
     remoteRunning: boolean
     remoteStartTime: string | null
     remoteEndTime: string | null
+    errorType: string
+    errorMsg: string | null
   }
   fuel: {
     amount: number
@@ -76,6 +78,41 @@ export interface VehicleStatus {
       frontRight: boolean
       rearLeft: boolean
       rearRight: boolean
+    }
+    tyrePressureKpa: {
+      frontLeft: number
+      frontRight: number
+      rearLeft: number
+      rearRight: number
+    }
+    lowVoltageBatteryWarning: boolean
+    daysToService: number
+    distanceToServiceKm: number
+    engineHoursToService: number
+    exteriorLights: {
+      brakeLightLeft: boolean
+      brakeLightCenter: boolean
+      brakeLightRight: boolean
+      fogLightFront: boolean
+      fogLightRear: boolean
+      positionLightFrontLeft: boolean
+      positionLightFrontRight: boolean
+      positionLightRearLeft: boolean
+      positionLightRearRight: boolean
+      highBeamLeft: boolean
+      highBeamRight: boolean
+      lowBeamLeft: boolean
+      lowBeamRight: boolean
+      daytimeRunningLightLeft: boolean
+      daytimeRunningLightRight: boolean
+      turnIndicationFrontLeft: boolean
+      turnIndicationFrontRight: boolean
+      turnIndicationRearLeft: boolean
+      turnIndicationRearRight: boolean
+      registrationPlateLight: boolean
+      sideMarkLights: boolean
+      hazardLights: boolean
+      reverseLights: boolean
     }
   }
   climatization: {
@@ -279,6 +316,67 @@ export function createApi(baseUrl: string) {
         `${base}/api/vehicles/${encodeURIComponent(vin)}/capabilities?session=${encodeURIComponent(sessionId)}`
       )
       return r.capabilities
+    },
+    async getTgStatus(): Promise<{
+      configured: boolean
+      tokenHint: string
+      source: "ui" | "env" | null
+    }> {
+      return request(`${base}/api/settings/tg/status`)
+    },
+    async setTgToken(
+      token: string,
+    ): Promise<{ ok: boolean; username?: string; verified: boolean; source: string }> {
+      return request(`${base}/api/settings/tg/set-token`, {
+        method: "POST",
+        body: JSON.stringify({ token }),
+      })
+    },
+    async testTgBot(
+      token?: string,
+    ): Promise<{ ok: boolean; username?: string }> {
+      return request(`${base}/api/settings/tg/test-bot`, {
+        method: "POST",
+        body: JSON.stringify({ token: token ?? "" }),
+      })
+    },
+    async testTgPush(chatId: string): Promise<void> {
+      await request(`${base}/api/settings/tg/test-push`, {
+        method: "POST",
+        body: JSON.stringify({ chatId }),
+      })
+    },
+    async saveTgChatId(vin: string, chatId: string): Promise<void> {
+      await request(`${base}/api/settings/tg/chat-id`, {
+        method: "POST",
+        body: JSON.stringify({ vin, chatId }),
+      })
+    },
+    async getSettings(sessionId: string): Promise<{
+      amapKey: string
+      amapSecurityCode: string
+      tgChatId: string
+    }> {
+      return request(
+        `${base}/api/settings?session=${encodeURIComponent(sessionId)}`,
+      )
+    },
+    async saveSettings(
+      sessionId: string,
+      settings: {
+        amapKey?: string
+        amapSecurityCode?: string
+        tgChatId?: string
+      },
+    ): Promise<{
+      amapKey: string
+      amapSecurityCode: string
+      tgChatId: string
+    }> {
+      return request(`${base}/api/settings`, {
+        method: "POST",
+        body: JSON.stringify({ session: sessionId, settings }),
+      })
     },
   }
 }

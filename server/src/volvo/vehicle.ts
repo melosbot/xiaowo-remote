@@ -57,6 +57,26 @@ const PRECLEAN_NOTIF: Record<string, string> = {
   PRE_CLEANING_NOTIFICATION_TYPE_INTRPT: "已中断",
 };
 
+const ERS_ERROR_MSG: Record<string, string> = {
+  Unspecifid1: "未知错误",
+  ExceededMaxAttempt: "已达最大启动次数",
+  CarUnLocked: "车辆未锁定",
+  KeyInCar: "钥匙在车内",
+  DoorOpen: "车门未关",
+  HoodOpen: "发动机舱盖未关",
+  IncorrectGear: "档位不在 P 档",
+  PersonInCar: "检测到车内有人",
+  PedalPressed: "踏板被踩下",
+  LowFuel: "燃油不足",
+  LowBattery: "电瓶电量不足",
+  LowBatteryAndFuel: "燃油与电瓶电量不足",
+  ChargerPlugged: "充电枪已连接",
+  EngineCoolantFault: "发动机冷却液故障",
+  BatteryCoolantFault: "电池冷却液故障",
+  ServiceRequired: "需要保养",
+  Other: "其他原因",
+};
+
 function isOpen(status: string): boolean {
   return status === "OPEN_STATUS_OPEN" || status === "OPEN_STATUS_AJAR";
 }
@@ -65,6 +85,27 @@ function hasWarning(status: unknown): boolean {
   if (typeof status === "number") return status > 1;
   if (typeof status !== "string") return false;
   return !status.endsWith("_UNSPECIFIED") && !status.endsWith("_NO_WARNING");
+}
+
+/** 轮询告警用的 Exterior 快照 */
+export interface ExteriorSnapshot {
+  vin: string;
+  carLocked: boolean;
+  doorsOpen: {
+    frontLeft: boolean;
+    frontRight: boolean;
+    rearLeft: boolean;
+    rearRight: boolean;
+    hood: boolean;
+    tailgate: boolean;
+  };
+  windowsOpen: {
+    frontLeft: boolean;
+    frontRight: boolean;
+    rearLeft: boolean;
+    rearRight: boolean;
+    sunroof: boolean;
+  };
 }
 
 export interface VehicleStatus {
@@ -96,6 +137,8 @@ export interface VehicleStatus {
     remoteRunning: boolean;
     remoteStartTime: string | null;
     remoteEndTime: string | null;
+    errorType: string;
+    errorMsg: string | null;
   };
   fuel: {
     amount: number;
@@ -133,6 +176,41 @@ export interface VehicleStatus {
       frontRight: boolean;
       rearLeft: boolean;
       rearRight: boolean;
+    };
+    tyrePressureKpa: {
+      frontLeft: number;
+      frontRight: number;
+      rearLeft: number;
+      rearRight: number;
+    };
+    lowVoltageBatteryWarning: boolean;
+    daysToService: number;
+    distanceToServiceKm: number;
+    engineHoursToService: number;
+    exteriorLights: {
+      brakeLightLeft: boolean;
+      brakeLightCenter: boolean;
+      brakeLightRight: boolean;
+      fogLightFront: boolean;
+      fogLightRear: boolean;
+      positionLightFrontLeft: boolean;
+      positionLightFrontRight: boolean;
+      positionLightRearLeft: boolean;
+      positionLightRearRight: boolean;
+      highBeamLeft: boolean;
+      highBeamRight: boolean;
+      lowBeamLeft: boolean;
+      lowBeamRight: boolean;
+      daytimeRunningLightLeft: boolean;
+      daytimeRunningLightRight: boolean;
+      turnIndicationFrontLeft: boolean;
+      turnIndicationFrontRight: boolean;
+      turnIndicationRearLeft: boolean;
+      turnIndicationRearRight: boolean;
+      registrationPlateLight: boolean;
+      sideMarkLights: boolean;
+      hazardLights: boolean;
+      reverseLights: boolean;
     };
   };
   climatization: {
@@ -301,6 +379,7 @@ export class VehicleController {
       : { latitude: 0, longitude: 0 };
 
     const engRunningStatus: string = eng?.engineRunningStatus ?? "Off";
+    const engErrorType: string = eng?.engineError ?? "Unspecifid1";
 
     return {
       vin,
@@ -336,6 +415,8 @@ export class VehicleController {
           ? String(eng.engineStartTime)
           : null,
         remoteEndTime: eng?.engineEndTime ? String(eng.engineEndTime) : null,
+        errorType: engErrorType,
+        errorMsg: ERS_ERROR_MSG[engErrorType] ?? null,
       },
       fuel: {
         amount: ful ? Math.round(ful.fuelAmount * 100) / 100 : 0,
@@ -387,6 +468,89 @@ export class VehicleController {
             : false,
           rearRight: hlt
             ? hasWarning(hlt.rear_right_tyre_pressure_warning)
+            : false,
+        },
+        tyrePressureKpa: {
+          frontLeft: hlt?.front_left_tyre_pressure_kpa ?? 0,
+          frontRight: hlt?.front_right_tyre_pressure_kpa ?? 0,
+          rearLeft: hlt?.rear_left_tyre_pressure_kpa ?? 0,
+          rearRight: hlt?.rear_right_tyre_pressure_kpa ?? 0,
+        },
+        lowVoltageBatteryWarning: hlt
+          ? hasWarning(hlt.low_voltage_battery_warning)
+          : false,
+        daysToService: hlt?.days_to_service ?? 0,
+        distanceToServiceKm: hlt?.distance_to_service_km ?? 0,
+        engineHoursToService: hlt?.engine_hours_to_service ?? 0,
+        exteriorLights: {
+          brakeLightLeft: hlt
+            ? hasWarning(hlt.brake_light_left_warning)
+            : false,
+          brakeLightCenter: hlt
+            ? hasWarning(hlt.brake_light_center_warning)
+            : false,
+          brakeLightRight: hlt
+            ? hasWarning(hlt.brake_light_right_warning)
+            : false,
+          fogLightFront: hlt
+            ? hasWarning(hlt.fog_light_front_warning)
+            : false,
+          fogLightRear: hlt
+            ? hasWarning(hlt.fog_light_rear_warning)
+            : false,
+          positionLightFrontLeft: hlt
+            ? hasWarning(hlt.position_light_front_left_warning)
+            : false,
+          positionLightFrontRight: hlt
+            ? hasWarning(hlt.position_light_front_right_warning)
+            : false,
+          positionLightRearLeft: hlt
+            ? hasWarning(hlt.position_light_rear_left_warning)
+            : false,
+          positionLightRearRight: hlt
+            ? hasWarning(hlt.position_light_rear_right_warning)
+            : false,
+          highBeamLeft: hlt
+            ? hasWarning(hlt.high_beam_left_warning)
+            : false,
+          highBeamRight: hlt
+            ? hasWarning(hlt.high_beam_right_warning)
+            : false,
+          lowBeamLeft: hlt
+            ? hasWarning(hlt.low_beam_left_warning)
+            : false,
+          lowBeamRight: hlt
+            ? hasWarning(hlt.low_beam_right_warning)
+            : false,
+          daytimeRunningLightLeft: hlt
+            ? hasWarning(hlt.daytime_running_light_left_warning)
+            : false,
+          daytimeRunningLightRight: hlt
+            ? hasWarning(hlt.daytime_running_light_right_warning)
+            : false,
+          turnIndicationFrontLeft: hlt
+            ? hasWarning(hlt.turn_indication_front_left_warning)
+            : false,
+          turnIndicationFrontRight: hlt
+            ? hasWarning(hlt.turn_indication_front_right_warning)
+            : false,
+          turnIndicationRearLeft: hlt
+            ? hasWarning(hlt.turn_indication_rear_left_warning)
+            : false,
+          turnIndicationRearRight: hlt
+            ? hasWarning(hlt.turn_indication_rear_right_warning)
+            : false,
+          registrationPlateLight: hlt
+            ? hasWarning(hlt.registration_plate_light_warning)
+            : false,
+          sideMarkLights: hlt
+            ? hasWarning(hlt.side_mark_lights_warning)
+            : false,
+          hazardLights: hlt
+            ? hasWarning(hlt.hazard_lights_warning)
+            : false,
+          reverseLights: hlt
+            ? hasWarning(hlt.reverse_lights_warning)
             : false,
         },
       },
@@ -468,6 +632,31 @@ export class VehicleController {
         innerColor: String((this.info as any).innerColor ?? ""),
         engineNumber: String((this.info as any).engineNumber ?? ""),
         coverImageUrl: String((this.info as any).coverImageUrl ?? ""),
+      },
+    };
+  }
+
+  /** 轻量 Exterior 快照，供轮询告警使用（不拉全量，仅 1 路 gRPC） */
+  async getExteriorSnapshot(): Promise<ExteriorSnapshot> {
+    const ext = await this.grpc.getExterior(this.vin);
+    const data = ext?.data;
+    return {
+      vin: this.vin,
+      carLocked: data?.central_lock === "LOCK_STATUS_LOCKED",
+      doorsOpen: {
+        frontLeft: isOpen(data?.front_left_door ?? "OPEN_STATUS_CLOSED"),
+        frontRight: isOpen(data?.front_right_door ?? "OPEN_STATUS_CLOSED"),
+        rearLeft: isOpen(data?.rear_left_door ?? "OPEN_STATUS_CLOSED"),
+        rearRight: isOpen(data?.rear_right_door ?? "OPEN_STATUS_CLOSED"),
+        hood: isOpen(data?.hood ?? "OPEN_STATUS_CLOSED"),
+        tailgate: isOpen(data?.tailgate ?? "OPEN_STATUS_CLOSED"),
+      },
+      windowsOpen: {
+        frontLeft: isOpen(data?.front_left_window ?? "OPEN_STATUS_CLOSED"),
+        frontRight: isOpen(data?.front_right_window ?? "OPEN_STATUS_CLOSED"),
+        rearLeft: isOpen(data?.rear_left_window ?? "OPEN_STATUS_CLOSED"),
+        rearRight: isOpen(data?.rear_right_window ?? "OPEN_STATUS_CLOSED"),
+        sunroof: isOpen(data?.sunroof ?? "OPEN_STATUS_CLOSED"),
       },
     };
   }

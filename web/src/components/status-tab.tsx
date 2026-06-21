@@ -81,6 +81,32 @@ function WarningStat({
   return <BoolStat label={label} on={on} onText={onText} offText="正常" />
 }
 
+const EXTERIOR_LIGHT_LABELS: Record<string, string> = {
+  brakeLightLeft: "左刹车灯",
+  brakeLightCenter: "中央刹车灯",
+  brakeLightRight: "右刹车灯",
+  fogLightFront: "前雾灯",
+  fogLightRear: "后雾灯",
+  positionLightFrontLeft: "左前位置灯",
+  positionLightFrontRight: "右前位置灯",
+  positionLightRearLeft: "左后位置灯",
+  positionLightRearRight: "右后位置灯",
+  highBeamLeft: "左远光灯",
+  highBeamRight: "右远光灯",
+  lowBeamLeft: "左近光灯",
+  lowBeamRight: "右近光灯",
+  daytimeRunningLightLeft: "左日行灯",
+  daytimeRunningLightRight: "右日行灯",
+  turnIndicationFrontLeft: "左前转向灯",
+  turnIndicationFrontRight: "右前转向灯",
+  turnIndicationRearLeft: "左后转向灯",
+  turnIndicationRearRight: "右后转向灯",
+  registrationPlateLight: "牌照灯",
+  sideMarkLights: "侧标灯",
+  hazardLights: "危险警示灯",
+  reverseLights: "倒车灯",
+}
+
 export function StatusTab() {
   const { data, loading, error, refresh } = useVehicleStatus()
 
@@ -213,6 +239,11 @@ export function StatusTab() {
               {data.engine.running ? "运行中" : "已停止"}
             </span>
           </div>
+          {data.engine.errorMsg && !data.engine.remoteRunning && (
+            <p className="text-xs text-destructive">
+              上次远程启动失败：{data.engine.errorMsg}
+            </p>
+          )}
           {data.preCleaning.supported && (
             <>
               <Separator />
@@ -365,6 +396,21 @@ export function StatusTab() {
             onText={data.health.serviceWarningMsg}
             offText={data.health.serviceWarningMsg}
           />
+          {(data.health.distanceToServiceKm > 0 ||
+            data.health.daysToService > 0) && (
+            <p className="text-xs text-muted-foreground">
+              距离下次保养
+              {data.health.distanceToServiceKm > 0 &&
+                ` 约 ${data.health.distanceToServiceKm} km`}
+              {data.health.daysToService > 0 &&
+                ` 约 ${data.health.daysToService} 天`}
+            </p>
+          )}
+          <WarningStat
+            label="低压电瓶"
+            on={data.health.lowVoltageBatteryWarning}
+            onText="电量不足"
+          />
           <WarningStat
             label="制动液"
             on={data.health.brakeFluidLevelWarning}
@@ -387,29 +433,81 @@ export function StatusTab() {
           />
           <Separator />
           <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-            <WarningStat
-              label="左前轮胎压力"
-              on={data.health.tyrePressure.frontLeft}
-              onText="异常"
-            />
-            <WarningStat
-              label="右前轮胎压力"
-              on={data.health.tyrePressure.frontRight}
-              onText="异常"
-            />
-            <WarningStat
-              label="左后轮胎压力"
-              on={data.health.tyrePressure.rearLeft}
-              onText="异常"
-            />
-            <WarningStat
-              label="右后轮胎压力"
-              on={data.health.tyrePressure.rearRight}
-              onText="异常"
-            />
+            {(
+              [
+                {
+                  pos: "左前",
+                  warn: data.health.tyrePressure.frontLeft,
+                  kpa: data.health.tyrePressureKpa.frontLeft,
+                },
+                {
+                  pos: "右前",
+                  warn: data.health.tyrePressure.frontRight,
+                  kpa: data.health.tyrePressureKpa.frontRight,
+                },
+                {
+                  pos: "左后",
+                  warn: data.health.tyrePressure.rearLeft,
+                  kpa: data.health.tyrePressureKpa.rearLeft,
+                },
+                {
+                  pos: "右后",
+                  warn: data.health.tyrePressure.rearRight,
+                  kpa: data.health.tyrePressureKpa.rearRight,
+                },
+              ] as const
+            ).map(({ pos, warn, kpa }) => (
+              <div key={pos} className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">{pos}轮胎</span>
+                <span className="text-sm">
+                  {kpa > 0 ? (
+                    <>
+                      <span
+                        className={
+                          warn
+                            ? "text-destructive font-medium"
+                            : "text-foreground"
+                        }
+                      >
+                        {kpa} kPa
+                      </span>
+                    </>
+                  ) : (
+                    <Badge variant={warn ? "destructive" : "secondary"}>
+                      {warn ? "异常" : "正常"}
+                    </Badge>
+                  )}
+                </span>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
+
+      {Object.entries(data.health.exteriorLights).some(
+        ([, v]) => v
+      ) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>车灯状态</CardTitle>
+            <CardDescription>以下车灯存在故障告警</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+              {Object.entries(data.health.exteriorLights)
+                .filter(([, v]) => v)
+                .map(([key]) => (
+                  <WarningStat
+                    key={key}
+                    label={EXTERIOR_LIGHT_LABELS[key] ?? key}
+                    on={true}
+                    onText="故障"
+                  />
+                ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

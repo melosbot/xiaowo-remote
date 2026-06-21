@@ -12,6 +12,10 @@ import {
   validateSession,
   restoreSessions,
   SessionError,
+  getActivePollingTargets,
+  setNotifyChatId,
+  getNotifyChatIdForVin,
+  getSessionPhone,
 } from "./session.js";
 import { InvocationError } from "./volvo/grpc.js";
 import { VolvoAPIError } from "./volvo/base.js";
@@ -23,6 +27,16 @@ import {
   DEMO_CAPS,
   demoStatus,
 } from "./volvo/demo.js";
+import {
+  getBotToken,
+  setBotToken,
+  getTokenSource,
+  testBotToken,
+  sendMessage,
+  initTokenPersistence,
+} from "./volvo/tg-notify.js";
+import { startPolling } from "./volvo/polling.js";
+import { getUserSettings, updateUserSettings } from "./volvo/settings-store.js";
 
 process.on("unhandledRejection", (err) => {
   console.error("[unhandledRejection]", err);
@@ -252,6 +266,134 @@ app.post("/api/vehicles/:vin/pre-cleaning/stop", (req, res) =>
   controlAction(req, res, (c) => c.preCleaningStop()),
 );
 
+// ---- Telegram Bot 推送配置 ----
+
+app.get("/api/settings/tg/status", (_req, res) => {
+  const token = getBotToken();
+  const source = getTokenSource();
+  if (!token) {
+    res.json({ configured: false, tokenHint: "", source: null });
+    return;
+  }
+  const hint =
+    token.length > 8
+      ? token.slice(0, 3) + "***" + token.slice(-4)
+      : "***";
+  res.json({ configured: true, tokenHint: hint, source });
+});
+
+app.post("/api/settings/tg/set-token", async (req, res) => {
+  const token = String((req.body as Record<string, unknown>)?.token ?? "").trim();
+  if (!token) {
+    setBotToken(null);
+    res.json({ ok: true, source: getTokenSource() });
+    return;
+  }
+  // 先持久化，后验证（避免 Telegram 偶发故障阻塞保存）
+  setBotToken(token);
+  try {
+    const result = await testBotToken(token);
+    res.json({
+      ok: true,
+      username: result.ok ? result.username : undefined,
+      verified: result.ok,
+      source: "ui" as const,
+    });
+  } catch {
+    res.json({ ok: true, verified: false, source: "ui" as const });
+  }
+});
+
+app.post("/api/settings/tg/test-bot", async (req, res) => {
+  // 优先用请求体中传入的 token，否则用已配置的
+  const bodyToken = String((req.body as Record<string, unknown>)?.token ?? "").trim();
+  const token = bodyToken || getBotToken();
+  if (!token) {
+    res.status(400).json({ error: "Bot Token 未配置" });
+    return;
+  }
+  try {
+    const result = await testBotToken(token);
+    if (result.ok) {
+      res.json({ ok: true, username: result.username });
+    } else {
+      res.status(502).json({ error: "Bot Token 无效" });
+    }
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+app.post("/api/settings/tg/test-push", async (req, res) => {
+  const token = getBotToken();
+  if (!token) {
+    res.status(400).json({ error: "Bot Token 未配置" });
+    return;
+  }
+  const chatId = String((req.body as Record<string, unknown>)?.chatId ?? "").trim();
+  if (!chatId) {
+    res.status(400).json({ error: "请填写 Chat ID" });
+    return;
+  }
+  try {
+    await sendMessage(
+      token,
+      chatId,
+      "✅ <b>小沃远控</b> 推送测试成功！\n\n您将在此收到离车告警通知。",
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+app.post("/api/settings/tg/chat-id", (req, res) => {
+  const vin = String((req.body as Record<string, unknown>)?.vin ?? "").trim();
+  const chatId = String((req.body as Record<string, unknown>)?.chatId ?? "").trim();
+  if (!vin) {
+    res.status(400).json({ error: "缺少 VIN" });
+    return;
+  }
+  setNotifyChatId(vin, chatId);
+  res.json({ ok: true });
+});
+
+// ---- 用户设置（按账号持久化） ----
+
+app.get("/api/settings", (req, res) => {
+  const sessionId = String((req.query as Record<string, string>).session ?? "");
+  if (!sessionId) { res.status(401).json({ error: "未登录" }); return }
+  const phone = getSessionPhone(sessionId);
+  if (!phone) { res.status(401).json({ error: "登录状态已失效" }); return }
+  res.json(getUserSettings(phone));
+});
+
+app.post("/api/settings", (req, res) => {
+  const sessionId = String((req.body as Record<string, unknown>)?.session ?? "");
+  if (!sessionId) { res.status(401).json({ error: "未登录" }); return }
+  const phone = getSessionPhone(sessionId);
+  if (!phone) { res.status(401).json({ error: "登录状态已失效" }); return }
+  const patch = (req.body as Record<string, unknown>)?.settings as Record<string, unknown> | undefined;
+  if (!patch || typeof patch !== "object") {
+    res.status(400).json({ error: "缺少 settings" });
+    return;
+  }
+  const updated = updateUserSettings(phone, {
+    amapKey: typeof patch.amapKey === "string" ? patch.amapKey : undefined,
+    amapSecurityCode: typeof patch.amapSecurityCode === "string" ? patch.amapSecurityCode : undefined,
+    tgChatId: typeof patch.tgChatId === "string" ? patch.tgChatId : undefined,
+  });
+  // 同步 TG Chat ID 到轮询
+  if (updated.tgChatId) {
+    // 找到这个 phone 的所有 VIN，设置 chat ID
+    const s = getSession(sessionId);
+    for (const vin of s.vehicles.keys()) {
+      setNotifyChatId(vin, updated.tgChatId);
+    }
+  }
+  res.json(updated);
+});
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = process.env.WEB_ROOT ?? path.resolve(__dirname, "../../web/dist");
 
@@ -284,7 +426,21 @@ const PORT = Number(process.env.PORT ?? 8787);
 const HOST = process.env.HOST ?? "0.0.0.0";
 
 restoreSessions().then(() => {
+  initTokenPersistence();
+
   app.listen(PORT, HOST, () => {
     console.log(`Volvo proxy listening on http://${HOST}:${PORT}`);
   });
+
+  if (getBotToken()) {
+    startPolling(
+      () =>
+        getActivePollingTargets().map((t) => ({
+          vin: t.vin,
+          getExterior: t.getExterior,
+        })),
+      getNotifyChatIdForVin,
+    );
+    console.log("[polling] started with TG alerts enabled");
+  }
 });

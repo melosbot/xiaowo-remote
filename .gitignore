@@ -39,3 +39,6 @@ apk/
 plans/
 docs/protocol/
 data/
+
+# Demo runtime directory (session data + persisted state)
+demo/
