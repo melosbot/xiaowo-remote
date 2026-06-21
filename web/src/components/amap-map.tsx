@@ -3,6 +3,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   Map,
   MapMarker,
+  MarkerContent,
   MapControls,
   type MapRef,
 } from "@/components/ui/map"
@@ -61,7 +62,7 @@ export function AmapMap({
           aria-label="车辆位置地图"
         >
           <MapMarker longitude={longitude} latitude={latitude}>
-            <></>
+            <MarkerContent />
           </MapMarker>
           <MapControls
             showZoom

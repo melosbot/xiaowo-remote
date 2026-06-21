@@ -303,21 +303,8 @@ export class VehicleGrpcAPI {
 
   constructor(private tokenProvider: () => string) {}
 
-  private buildCredentials(): grpc.ChannelCredentials {
-    const callCreds = grpc.credentials.createFromMetadataGenerator(
-      (_params, callback) => {
-        const token = this.tokenProvider().trim();
-        const meta = new grpc.Metadata();
-        meta.add("authorization", `Bearer ${token}`);
-        callback(null, meta);
-      },
-    );
-    const sslCreds = grpc.credentials.createSsl();
-    return grpc.credentials.combineChannelCredentials(sslCreds, callCreds);
-  }
-
-  private getCredentials(): grpc.ChannelCredentials {
-    if (!this.creds) this.creds = this.buildCredentials();
+  private sslCreds(): grpc.ChannelCredentials {
+    if (!this.creds) this.creds = grpc.credentials.createSsl();
     return this.creds;
   }
 
@@ -325,7 +312,7 @@ export class VehicleGrpcAPI {
     if (!this.mainClient) {
       this.mainClient = new grpc.Client(
         GRPC_MAIN_HOST,
-        this.getCredentials(),
+        this.sslCreds(),
         {
           "grpc.primary_user_agent": GRPC_USER_AGENT,
           "grpc.accept_encoding": "gzip",
@@ -342,7 +329,7 @@ export class VehicleGrpcAPI {
 
   private getLbsClient(): grpc.Client {
     if (!this.lbsClient) {
-      this.lbsClient = new grpc.Client(GRPC_LBS_HOST, this.getCredentials(), {
+      this.lbsClient = new grpc.Client(GRPC_LBS_HOST, this.sslCreds(), {
         "grpc.primary_user_agent": GRPC_USER_AGENT,
         "grpc.keepalive_time_ms": 60_000,
         "grpc.keepalive_timeout_ms": 20_000,
@@ -356,7 +343,7 @@ export class VehicleGrpcAPI {
     if (!this.invocationStub) {
       this.invocationStub = new InvocationService(
         GRPC_MAIN_HOST,
-        this.getCredentials(),
+        this.sslCreds(),
         {
           "grpc.primary_user_agent": GRPC_USER_AGENT,
           "grpc.accept_encoding": "gzip",
@@ -389,9 +376,11 @@ export class VehicleGrpcAPI {
     this.lbsClient = null;
   }
 
-  private vinMeta(vin: string): grpc.Metadata {
+  private authMeta(vin?: string): grpc.Metadata {
     const meta = new grpc.Metadata();
-    meta.add("vin", vin);
+    const token = this.tokenProvider().trim();
+    meta.add("authorization", `Bearer ${token}`);
+    if (vin) meta.add("vin", vin);
     return meta;
   }
 
@@ -409,7 +398,7 @@ export class VehicleGrpcAPI {
       method.requestSerialize,
       method.responseDeserialize,
       request,
-      this.vinMeta(vin),
+      this.authMeta(vin),
     );
     return firstStreamMessage(call, label);
   }
@@ -427,7 +416,7 @@ export class VehicleGrpcAPI {
       method.requestSerialize,
       (buf: Buffer) => buf,
       request,
-      this.vinMeta(vin),
+      this.authMeta(vin),
     );
     return firstStreamMessage(call, label);
   }
@@ -499,7 +488,7 @@ export class VehicleGrpcAPI {
   }
   async getLocation(vin: string): Promise<any> {
     const reqBytes = encodeLocationReq(vin);
-    const meta = this.vinMeta(vin);
+    const meta = this.authMeta(vin);
     for (const host of ["lbs", "main"] as const) {
       const client =
         host === "lbs" ? this.getLbsClient() : this.getMainClient();
@@ -576,7 +565,7 @@ export class VehicleGrpcAPI {
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const stub = this.getInvocationStub();
-        const call = stub[methodName](req, this.vinMeta(vin), {
+        const call = stub[methodName](req, this.authMeta(vin), {
           deadline: Date.now() + GRPC_TIMEOUT_MS,
         });
         const resp = await firstStreamMessage(call, label);
