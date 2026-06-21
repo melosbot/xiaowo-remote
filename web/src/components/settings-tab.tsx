@@ -1,7 +1,6 @@
 import { useState, useEffect, type FormEvent } from "react"
 import {
   LogOutIcon,
-  RefreshCwIcon,
   LogInIcon,
   RotateCcwIcon,
   SaveIcon,
@@ -47,7 +46,7 @@ import {
 export function SettingsTab() {
   const { api, sessionId, vehicles, selectedVin, phone, selectVin, login, logout } =
     useAuth()
-  const { loading: statusLoading, refresh, data } = useVehicleStatus()
+  const { data } = useVehicleStatus()
   const [phoneInput, setPhoneInput] = useState(
     () => loadCredentials()?.phone ?? phone ?? ""
   )
@@ -198,12 +197,6 @@ export function SettingsTab() {
   const handleLogout = async () => {
     await logout()
     toast.success("已安全退出")
-  }
-
-  const handleRefresh = async () => {
-    const refreshed = await refresh()
-    if (refreshed) toast.success("车辆状态已刷新")
-    else toast.error("暂时无法刷新车辆状态，请稍后重试")
   }
 
   const handleAmapSave = async (e: FormEvent) => {
@@ -373,18 +366,6 @@ export function SettingsTab() {
                 )}
               </div>
             )}
-            <Button
-              variant="outline"
-              disabled={statusLoading}
-              onClick={handleRefresh}
-            >
-              {statusLoading ? (
-                <Spinner data-icon="inline-start" />
-              ) : (
-                <RefreshCwIcon data-icon="inline-start" />
-              )}
-              {statusLoading ? "刷新中" : "刷新状态"}
-            </Button>
           </CardContent>
         </Card>
       )}
@@ -540,7 +521,7 @@ export function SettingsTab() {
         <CardHeader>
           <CardTitle>关于应用</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3 text-sm text-muted-foreground">
+        <CardContent className="flex flex-col gap-4 text-sm text-muted-foreground">
           <div className="flex items-center justify-between">
             <span>产品名称</span>
             <Badge variant="secondary">小沃远控</Badge>

@@ -26,11 +26,11 @@ export function BottomNav({
             data-active={on}
             aria-current={on ? "page" : undefined}
             className={cn(
-              "flex flex-1 flex-col items-center gap-0.5 py-2 text-xs transition-colors duration-200 motion-reduce:transition-none",
+              "flex flex-1 flex-col items-center gap-1 py-2 text-xs transition-colors duration-200 motion-reduce:transition-none",
               on ? "text-foreground" : "text-muted-foreground"
             )}
           >
-            <Icon className="size-5" />
+            <Icon className="size-4" />
             <span>{t.label}</span>
           </button>
         )

@@ -2,10 +2,8 @@ import { type ReactNode } from "react"
 import {
   ExternalLinkIcon,
   RefreshCwIcon,
-  WindIcon,
   FuelIcon,
 } from "lucide-react"
-import { toast } from "sonner"
 import { useVehicleStatus } from "@/hooks/use-vehicle-status"
 import {
   Card,
@@ -19,7 +17,6 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Spinner } from "@/components/ui/spinner"
 import { Progress } from "@/components/ui/progress"
 import { Empty, EmptyDescription, EmptyTitle } from "@/components/ui/empty"
 import { AmapMap } from "@/components/amap-map"
@@ -29,7 +26,7 @@ import { cn } from "@/lib/utils"
 
 function Stat({ label, value }: { label: string; value?: ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="flex flex-col gap-1">
       <span className="text-xs text-muted-foreground">{label}</span>
       <span className="text-sm">{value ?? "—"}</span>
     </div>
@@ -98,12 +95,6 @@ const EXTERIOR_LIGHT_LABELS: Record<string, string> = {
 export function StatusTab() {
   const { data, loading, error, refresh } = useVehicleStatus()
 
-  const handleRefresh = async () => {
-    const refreshed = await refresh()
-    if (refreshed) toast.success("车辆状态已刷新")
-    else toast.error("暂时无法刷新车辆状态，请稍后重试")
-  }
-
   if (loading && !data) {
     return (
       <div className="flex flex-col gap-4">
@@ -134,38 +125,18 @@ export function StatusTab() {
     data.preCleaning.aqi > 0 ||
     data.preCleaning.pm25 > 0
   const airQualitySummary = [
-    data.preCleaning.notifMsg,
     data.preCleaning.aqi > 0 ? `AQI ${data.preCleaning.aqi}` : null,
     data.preCleaning.pm25 > 0 ? `PM2.5 ${data.preCleaning.pm25} μg/m³` : null,
   ]
     .filter(Boolean)
     .join(" · ")
 
+  const isElectric = data.vehicleInfo.carType === "electric"
+  const energyUnit = isElectric ? "kWh" : "L"
+  const consumptionLabel = isElectric ? "平均电耗" : "平均油耗"
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">
-          最后更新：
-          {new Date(data.updatedAt).toLocaleTimeString("zh-CN", {
-            hour12: false,
-          })}
-          {data.failures.length > 0 &&
-            ` · 部分不可用`}
-        </span>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-9 rounded-full"
-          disabled={loading}
-          onClick={handleRefresh}
-        >
-          {loading ? (
-            <Spinner />
-          ) : (
-            <RefreshCwIcon className="size-4" />
-          )}
-        </Button>
-      </div>
       <Card>
         <CardHeader>
           <CardTitle>车辆概览</CardTitle>
@@ -175,39 +146,39 @@ export function StatusTab() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <div className="flex items-center gap-2">
-            <FuelIcon className="size-5 text-muted-foreground" />
-            <div className="flex-1">
-              <div className="flex items-baseline justify-between">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-baseline justify-between">
+              <span className="inline-flex items-baseline gap-1">
+                <FuelIcon className="size-[1.35rem] self-center text-muted-foreground" />
                 <span className="text-2xl font-semibold">
-                  {data.fuel.amount} L
+                  {data.fuel.amount}
                 </span>
-                <span className="text-sm text-muted-foreground">
-                  预计续航 {data.fuel.distanceToEmptyKm} km
-                </span>
-              </div>
-              <Progress
-                value={
-                  data.fuel.tankCapacity > 0
-                    ? Math.min(
-                        100,
-                        (data.fuel.amount / data.fuel.tankCapacity) * 100
-                      )
-                    : 0
-                }
-                className="mt-2"
-              />
+                <span className="text-sm text-muted-foreground">{energyUnit}</span>
+              </span>
+              <span className="text-sm text-muted-foreground">
+                预计续航 {data.fuel.distanceToEmptyKm} km
+              </span>
             </div>
+            <Progress
+              value={
+                data.fuel.tankCapacity > 0
+                  ? Math.min(
+                      100,
+                      (data.fuel.amount / data.fuel.tankCapacity) * 100
+                    )
+                  : 0
+              }
+            />
           </div>
           <Separator />
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
             <Stat
               label="累计里程"
               value={`${Math.round(data.odometerKm)} km`}
             />
             <Stat
-              label="平均油耗"
-              value={`${data.fuel.avgConsumptionL100Km.toFixed(1)} L/100 km`}
+              label={consumptionLabel}
+              value={`${data.fuel.avgConsumptionL100Km.toFixed(1)} ${energyUnit}/100 km`}
             />
           </div>
           <Separator />
@@ -244,12 +215,9 @@ export function StatusTab() {
             <>
               <Separator />
               <div className="flex items-center gap-2">
-                <WindIcon className="size-4 text-muted-foreground" />
                 <span className="text-sm text-muted-foreground">车内空气</span>
                 <span className="ml-auto text-sm font-medium">
-                  {hasAirQualityMeasurement
-                    ? airQualitySummary
-                    : data.preCleaning.notifMsg}
+                  {hasAirQualityMeasurement ? airQualitySummary : "—"}
                 </span>
               </div>
             </>
@@ -268,10 +236,10 @@ export function StatusTab() {
             </p>
             <div className="grid grid-cols-3 gap-x-4 gap-y-2">
               <Stat
-                label="平均油耗"
+                label={consumptionLabel}
                 value={
                   data.drivingStats.tm.avgFuelL100Km > 0
-                    ? `${data.drivingStats.tm.avgFuelL100Km.toFixed(1)} L/100 km`
+                    ? `${data.drivingStats.tm.avgFuelL100Km.toFixed(1)} ${energyUnit}/100 km`
                     : "—"
                 }
               />
@@ -296,10 +264,10 @@ export function StatusTab() {
             </p>
             <div className="grid grid-cols-3 gap-x-4 gap-y-2">
               <Stat
-                label="平均油耗"
+                label={consumptionLabel}
                 value={
                   data.drivingStats.ta.avgFuelL100Km > 0
-                    ? `${data.drivingStats.ta.avgFuelL100Km.toFixed(1)} L/100 km`
+                    ? `${data.drivingStats.ta.avgFuelL100Km.toFixed(1)} ${energyUnit}/100 km`
                     : "--"
                 }
               />
@@ -324,7 +292,7 @@ export function StatusTab() {
         <CardHeader>
           <CardTitle>门窗状态</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-2.5">
+        <CardContent className="flex flex-col gap-2">
           {([
             { pos: "左前", door: data.doors.frontLeft, win: data.windows.frontLeft },
             { pos: "右前", door: data.doors.frontRight, win: data.windows.frontRight },
@@ -332,8 +300,8 @@ export function StatusTab() {
             { pos: "右后", door: data.doors.rearRight, win: data.windows.rearRight },
           ] as const).map(({ pos, door, win }) => (
             <div key={pos} className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground w-8">{pos}</span>
-              <div className="flex gap-1.5">
+              <span className="text-sm text-muted-foreground">{pos}</span>
+              <div className="flex gap-1">
                 <Badge variant={door ? "destructive" : "secondary"}>
                   {door ? "门已开" : "门已关"}
                 </Badge>
@@ -355,7 +323,7 @@ export function StatusTab() {
           <CardHeader>
             <CardTitle>停车温控</CardTitle>
           </CardHeader>
-          <CardContent className="flex flex-col gap-2.5">
+          <CardContent className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <span className="text-sm">运行状态</span>
               <Badge
@@ -385,7 +353,7 @@ export function StatusTab() {
         <CardHeader>
           <CardTitle>车辆健康</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-2.5">
+        <CardContent className="flex flex-col gap-2">
           <BoolStat
             label="保养状态"
             on={data.health.serviceWarning}
@@ -428,7 +396,7 @@ export function StatusTab() {
             onText="余量不足"
           />
           <Separator />
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2">
             {(
               [
                 {
@@ -489,7 +457,7 @@ export function StatusTab() {
             <CardDescription>以下车灯存在故障告警</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
               {Object.entries(data.health.exteriorLights)
                 .filter(([, v]) => v)
                 .map(([key]) => (
@@ -509,7 +477,7 @@ export function StatusTab() {
         <CardHeader>
           <CardTitle>车辆位置</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <CardContent className="flex flex-col gap-4">
           <AmapMap
             latitude={data.position.latitude}
             longitude={data.position.longitude}

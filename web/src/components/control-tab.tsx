@@ -15,6 +15,7 @@ import {
   ArrowDownIcon,
   DoorOpenIcon,
   DoorClosedIcon,
+  AlertCircleIcon,
   type LucideIcon,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -98,6 +99,11 @@ export function ControlTab() {
 
   const confirm = () => {
     if (!pending) return
+    if (data?.engine.running) {
+      toast.error("发动机运行中，远程控制已锁定")
+      setPending(null)
+      return
+    }
     const { key, fn, okMsg } = pending
     setPending(null)
     execute(key, fn, okMsg)
@@ -124,9 +130,17 @@ export function ControlTab() {
       <Icon data-icon="inline-start" />
     )
 
+  const engineActive = data.engine.running
+
   return (
     <>
       <div className="flex flex-col gap-4">
+      {engineActive && (
+        <div className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning">
+          <AlertCircleIcon className="size-4 shrink-0 text-warning" />
+          发动机运行中，远程控制已锁定
+        </div>
+      )}
       {cap("lock", caps) !== "no" && cap("unlock", caps) !== "no" && (
         <Card>
           <CardHeader>
@@ -142,7 +156,7 @@ export function ControlTab() {
             {data.carLocked ? (
               <Button
                 className="w-full"
-                disabled={busy.unlock || cap("unlock", caps) === "maybe"}
+                disabled={busy.unlock || cap("unlock", caps) === "maybe" || engineActive}
                 onClick={() =>
                   request("unlock", () => ctrl("unlock"), "已发送解锁指令")
                 }
@@ -154,7 +168,7 @@ export function ControlTab() {
               <Button
                 variant="secondary"
                 className="w-full"
-                disabled={busy.lock || cap("lock", caps) === "maybe"}
+                disabled={busy.lock || cap("lock", caps) === "maybe" || engineActive}
                 onClick={() => request("lock", () => ctrl("lock"), "已发送锁车指令")}
               >
                 {actionIcon("lock", LockIcon)}
@@ -188,12 +202,13 @@ export function ControlTab() {
             min={1}
             max={15}
             step={1}
+            disabled={engineActive}
             onValueChange={(v) => setDuration(v[0])}
           />
           <div className="flex gap-2">
             <Button
               className="flex-1"
-              disabled={busy.engineStart}
+              disabled={busy.engineStart || engineActive}
               onClick={() =>
                 request(
                   "engineStart",
@@ -208,7 +223,7 @@ export function ControlTab() {
             <Button
               variant="outline"
               className="flex-1"
-              disabled={busy.engineStop}
+              disabled={busy.engineStop || engineActive}
               onClick={() =>
                 request(
                   "engineStop",
@@ -235,7 +250,7 @@ export function ControlTab() {
           <div className="grid grid-cols-3 gap-2">
             <Button
               variant="outline"
-              disabled={busy.flash}
+              disabled={busy.flash || engineActive}
               onClick={() =>
                 request("flash", () => ctrl("flash"), "已发送闪灯指令")
               }
@@ -245,7 +260,7 @@ export function ControlTab() {
             </Button>
             <Button
               variant="outline"
-              disabled={busy.honk}
+              disabled={busy.honk || engineActive}
               onClick={() => request("honk", () => ctrl("honk"), "已发送鸣笛指令")}
             >
               {actionIcon("honk", Volume2Icon)}
@@ -253,7 +268,7 @@ export function ControlTab() {
             </Button>
             <Button
               variant="outline"
-              disabled={busy.honkFlash}
+              disabled={busy.honkFlash || engineActive}
               onClick={() =>
                 request(
                   "honkFlash",
@@ -283,7 +298,7 @@ export function ControlTab() {
             <Button
               variant="outline"
               className="flex-1"
-              disabled={busy.windowOpen}
+              disabled={busy.windowOpen || engineActive}
               onClick={() =>
                 request(
                   "windowOpen",
@@ -298,7 +313,7 @@ export function ControlTab() {
             <Button
               variant="outline"
               className="flex-1"
-              disabled={busy.windowClose}
+              disabled={busy.windowClose || engineActive}
               onClick={() =>
                 request(
                   "windowClose",
@@ -316,7 +331,7 @@ export function ControlTab() {
             <Button
               variant="outline"
               className="flex-1"
-              disabled={busy.sunroofOpen}
+              disabled={busy.sunroofOpen || engineActive}
               onClick={() =>
                 request(
                   "sunroofOpen",
@@ -331,7 +346,7 @@ export function ControlTab() {
             <Button
               variant="outline"
               className="flex-1"
-              disabled={busy.sunroofClose}
+              disabled={busy.sunroofClose || engineActive}
               onClick={() =>
                 request(
                   "sunroofClose",
@@ -349,7 +364,7 @@ export function ControlTab() {
             <Button
               variant="outline"
               className="flex-1"
-              disabled={busy.tailgateOpen}
+              disabled={busy.tailgateOpen || engineActive}
               onClick={() =>
                 request(
                   "tailgateOpen",
@@ -364,7 +379,7 @@ export function ControlTab() {
             <Button
               variant="outline"
               className="flex-1"
-              disabled={busy.tailgateClose}
+              disabled={busy.tailgateClose || engineActive}
               onClick={() =>
                 request(
                   "tailgateClose",
@@ -396,7 +411,7 @@ export function ControlTab() {
             <div className="flex gap-2">
               <Button
                 className="flex-1"
-                disabled={busy.preCleaningStart}
+                disabled={busy.preCleaningStart || engineActive}
                 onClick={() =>
                   request(
                     "preCleaningStart",
@@ -411,7 +426,7 @@ export function ControlTab() {
               <Button
                 variant="outline"
                 className="flex-1"
-                disabled={busy.preCleaningStop}
+                disabled={busy.preCleaningStop || engineActive}
                 onClick={() =>
                   request(
                     "preCleaningStop",

@@ -93,12 +93,12 @@ export function AmapMap({
         {state === "ready" && (
           <Button
             variant="secondary"
-            size="sm"
-            className="absolute right-2 top-2 size-8 p-0 shadow"
+            size="icon-sm"
+            className="absolute right-2 top-2 shadow-sm"
             onClick={handleLocate}
             aria-label="回到车辆位置"
           >
-            <LocateFixedIcon className="size-4" />
+            <LocateFixedIcon />
           </Button>
         )}
       </div>
