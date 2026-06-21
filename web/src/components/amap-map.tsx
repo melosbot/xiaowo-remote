@@ -56,6 +56,7 @@ export function AmapMap({
           center={[longitude, latitude]}
           zoom={16}
           viewMode="2D"
+          styles={{ light: "amap://styles/whitesmoke", dark: "amap://styles/dark" }}
           amapKey={config.key}
           securityJsCode={config.securityJsCode}
           className="size-full"
