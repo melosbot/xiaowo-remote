@@ -58,7 +58,6 @@ const PRECLEAN_NOTIF: Record<string, string> = {
 };
 
 const ERS_ERROR_MSG: Record<string, string> = {
-  Unspecifid1: "未知错误",
   ExceededMaxAttempt: "已达最大启动次数",
   CarUnLocked: "车辆未锁定",
   KeyInCar: "钥匙在车内",

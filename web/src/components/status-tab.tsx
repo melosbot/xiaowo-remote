@@ -134,6 +134,14 @@ export function StatusTab() {
   const isElectric = data.vehicleInfo.carType === "electric"
   const energyUnit = isElectric ? "kWh" : "L"
   const consumptionLabel = isElectric ? "平均电耗" : "平均油耗"
+  const serviceBadgeText = [
+    data.health.serviceWarningMsg,
+    data.health.distanceToServiceKm > 0
+      ? `${data.health.distanceToServiceKm} km`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" · ")
 
   return (
     <div className="flex flex-col gap-4">
@@ -357,19 +365,9 @@ export function StatusTab() {
           <BoolStat
             label="保养状态"
             on={data.health.serviceWarning}
-            onText={data.health.serviceWarningMsg}
-            offText={data.health.serviceWarningMsg}
+            onText={serviceBadgeText}
+            offText={serviceBadgeText}
           />
-          {(data.health.distanceToServiceKm > 0 ||
-            data.health.daysToService > 0) && (
-            <p className="text-xs text-muted-foreground">
-              距离下次保养
-              {data.health.distanceToServiceKm > 0 &&
-                ` 约 ${data.health.distanceToServiceKm} km`}
-              {data.health.daysToService > 0 &&
-                ` 约 ${data.health.daysToService} 天`}
-            </p>
-          )}
           <WarningStat
             label="低压电瓶"
             on={data.health.lowVoltageBatteryWarning}
