@@ -59,7 +59,10 @@ export function persistSession(
   phone: string,
   password: string,
 ): void {
-  const sessions = readStore().filter((s) => s.sessionId !== sessionId);
+  // Dedup by phone: same account should only have one persisted session
+  const sessions = readStore().filter(
+    (s) => s.sessionId !== sessionId && s.phone !== phone,
+  );
   sessions.push({ sessionId, phone, password, createdAt: Date.now() });
   writeStore(sessions);
 }

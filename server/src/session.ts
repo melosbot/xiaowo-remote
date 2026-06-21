@@ -10,11 +10,13 @@ import {
 interface Session {
   base: VehicleBaseAPI;
   vehicles: Map<string, VehicleController>;
+  phone: string;
   createdAt: number;
   keepAlive: ReturnType<typeof setInterval>;
 }
 
 const sessions = new Map<string, Session>();
+const phoneSessions = new Map<string, string>(); // phone → sessionId
 const KEEPALIVE_INTERVAL_MS = 1000 * 60 * 5;
 
 async function initSession(
@@ -47,12 +49,19 @@ async function initSession(
   }, KEEPALIVE_INTERVAL_MS);
   keepAlive.unref();
 
+  const oldSid = phoneSessions.get(phone);
+  if (oldSid && oldSid !== sid) {
+    destroySession(oldSid);
+  }
+
   sessions.set(sid, {
     base,
     vehicles: controllers,
+    phone,
     createdAt: Date.now(),
     keepAlive,
   });
+  phoneSessions.set(phone, sid);
   return { sessionId: sid, vehicles };
 }
 
@@ -132,6 +141,7 @@ export function destroySession(sessionId: string): void {
     clearInterval(s.keepAlive);
     for (const ctrl of s.vehicles.values()) ctrl.close();
     sessions.delete(sessionId);
+    phoneSessions.delete(s.phone);
     removePersistedSession(sessionId);
   }
 }
