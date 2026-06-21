@@ -231,4 +231,5 @@ npm run typecheck && npm test
 
 ## 致谢
 
-感谢 [LinuxDo](https://linux.do) 社区的讨论、协助与鼓励，推动了这个项目的诞生与完善。
+- 本项目受到 [hass-volvooncall-cn](https://github.com/idreamshen/hass-volvooncall-cn) 的启发，感谢 [@idreamshen](https://github.com/idreamshen) 的工作。
+- 感谢 [LinuxDo](https://linux.do) 社区的讨论、协助与鼓励，推动了这个项目的诞生与完善。
