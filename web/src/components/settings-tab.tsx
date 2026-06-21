@@ -15,7 +15,6 @@ import {
   clearAmapConfig,
   loadAmapConfig,
   saveAmapConfig,
-  loadAmap,
 } from "@/lib/amap"
 import { loadTgConfig, saveTgConfig } from "@/lib/tg"
 import {
@@ -131,7 +130,9 @@ export function SettingsTab() {
   const handleAmapTest = async () => {
     setAmapTesting(true)
     try {
-      await loadAmap()
+      const config = loadAmapConfig()
+      const { default: AMapLoader } = await import("@amap/amap-jsapi-loader")
+      await AMapLoader.load({ key: config.key, version: "2.0" })
       toast.success("高德地图配置有效，可以正常加载")
     } catch {
       toast.error("高德地图 Key 无效，请检查 Key 和安全密钥")

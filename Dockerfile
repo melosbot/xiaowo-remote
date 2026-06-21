@@ -19,15 +19,37 @@ COPY server/tsconfig.json ./
 COPY server/src/ ./src/
 RUN npx tsc \
     && cp -r src/proto dist/proto \
-    && npm prune --omit=dev
+    && rm -rf node_modules \
+    && npm ci --omit=dev --no-audit --no-fund \
+    && npm cache clean --force
 
-FROM node:24-alpine AS runtime
+# Strip runtime-useless bloat from production node_modules
+RUN find node_modules -type f \( \
+      -name "*.ts" -o -name "*.map" -o -name "*.md" \
+      -o -name "*.tsx" -o -name "*.jsx" \
+      -o -name "*.yml" -o -name "*.yaml" \
+      -o -name "*.editorconfig" -o -name ".npmignore" \
+      -o -name "LICENSE" -o -name "LICENSE-MIT" -o -name "LICENSE.txt" \
+      -o -name "CHANGELOG.md" -o -name "CHANGES.md" -o -name "HISTORY.md" \
+    \) -delete 2>/dev/null; \
+    find node_modules -type d \( \
+      -name "test" -o -name "tests" -o -name "__tests__" \
+      -o -name "doc" -o -name "docs" -o -name "example" -o -name "examples" \
+      -o -name ".github" -o -name "benchmark" -o -name "benchmarks" \
+    \) -exec rm -rf {} + 2>/dev/null; \
+    rm -rf node_modules/@types 2>/dev/null; \
+    rm -rf node_modules/yargs 2>/dev/null
+
+FROM alpine:3.24 AS runtime
+# Alpine's nodejs is ~52MB (vs Docker official's 122MB) and does NOT include npm
+RUN apk add --no-cache nodejs
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=8787 \
     DATA_DIR=/app/data
 WORKDIR /app/server
-RUN mkdir -p /app/data && chown node:node /app/data
+RUN addgroup -g 1000 node && adduser -u 1000 -G node -s /bin/sh -D node \
+    && mkdir -p /app/data && chown node:node /app/data
 COPY --from=server-build --chown=node:node /build/server/package*.json ./
 COPY --from=server-build --chown=node:node /build/server/node_modules ./node_modules
 COPY --from=server-build --chown=node:node /build/server/dist ./dist

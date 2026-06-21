@@ -1,31 +1,3 @@
-import { load } from "@amap/amap-jsapi-loader"
-
-export interface AmapNamespace {
-  Map: new (
-    container: HTMLDivElement,
-    options: { center: [number, number]; zoom: number; viewMode: "2D" }
-  ) => AmapMapInstance
-  Marker: new (options: {
-    position: [number, number]
-    title: string
-  }) => unknown
-}
-
-export interface AmapMapInstance {
-  add(overlay: unknown): void
-  destroy(): void
-  setCenter(center: [number, number]): void
-  setZoom(zoom: number): void
-}
-
-declare global {
-  interface Window {
-    _AMapSecurityConfig?: {
-      securityJsCode?: string
-    }
-  }
-}
-
 export interface AmapConfig {
   key: string
   securityJsCode: string
@@ -36,7 +8,6 @@ const envConfig: AmapConfig = {
   key: import.meta.env.VITE_AMAP_KEY?.trim() ?? "",
   securityJsCode: import.meta.env.VITE_AMAP_SECURITY_JS_CODE?.trim() ?? "",
 }
-let amapPromise: Promise<AmapNamespace> | null = null
 
 export function loadAmapConfig(): AmapConfig {
   try {
@@ -83,19 +54,6 @@ export function clearAmapConfig(): void {
 export function isAmapConfigured(): boolean {
   const config = loadAmapConfig()
   return Boolean(config.key && config.securityJsCode)
-}
-
-export function loadAmap(): Promise<AmapNamespace> {
-  if (!amapPromise) {
-    const config = loadAmapConfig()
-    window._AMapSecurityConfig = { securityJsCode: config.securityJsCode }
-    amapPromise = load({
-      key: config.key,
-      version: "2.0",
-      plugins: [],
-    }) as Promise<AmapNamespace>
-  }
-  return amapPromise
 }
 
 export function isValidPosition(latitude: number, longitude: number): boolean {
