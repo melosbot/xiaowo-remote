@@ -1,14 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useRef } from "react"
 import { LocateFixedIcon } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
-import {
-  isAmapConfigured,
-  isValidPosition,
-  loadAmap,
-  type AmapMapInstance,
-} from "@/lib/amap"
+import { Map, MapMarker, type MapRef } from "@/components/ui/map"
+import { isValidPosition, loadAmapConfig } from "@/lib/amap"
 
 export function AmapMap({
   latitude,
@@ -17,46 +12,16 @@ export function AmapMap({
   latitude: number
   longitude: number
 }) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const mapRef = useRef<AmapMapInstance | null>(null)
-  const [state, setState] = useState<"loading" | "ready" | "error">("loading")
-
+  const mapRef = useRef<MapRef>(null)
   const hasPosition = isValidPosition(latitude, longitude)
-  const isConfigured = isAmapConfigured()
-
-  useEffect(() => {
-    if (!hasPosition || !isConfigured || !containerRef.current) return
-
-    let cancelled = false
-    setState("loading")
-
-    loadAmap()
-      .then((AMap) => {
-        if (cancelled || !containerRef.current) return
-        const center: [number, number] = [longitude, latitude]
-        const map = new AMap.Map(containerRef.current, {
-          center,
-          zoom: 16,
-          viewMode: "2D",
-        })
-        map.add(new AMap.Marker({ position: center, title: "车辆位置" }))
-        mapRef.current = map
-        setState("ready")
-      })
-      .catch(() => {
-        if (!cancelled) setState("error")
-      })
-
-    return () => {
-      cancelled = true
-      mapRef.current?.destroy()
-      mapRef.current = null
-    }
-  }, [hasPosition, isConfigured, latitude, longitude])
+  const config = loadAmapConfig()
+  const isConfigured = Boolean(config.key && config.securityJsCode)
 
   const handleLocate = useCallback(() => {
-    mapRef.current?.setCenter([longitude, latitude])
-    mapRef.current?.setZoom(16)
+    const map = mapRef.current?.map
+    if (!map) return
+    map.setCenter([longitude, latitude])
+    map.setZoom(16)
   }, [latitude, longitude])
 
   if (!hasPosition) {
@@ -82,32 +47,30 @@ export function AmapMap({
   return (
     <div className="flex flex-col gap-2">
       <div className="relative h-56 overflow-hidden rounded-lg border">
-        <div
-          ref={containerRef}
+        <Map
+          ref={mapRef}
+          center={[longitude, latitude]}
+          zoom={16}
+          viewMode="2D"
+          amapKey={config.key}
+          securityJsCode={config.securityJsCode}
           className="size-full"
           aria-label="车辆位置地图"
-        />
-        {state === "loading" && (
-          <Skeleton className="absolute inset-0 size-full rounded-none" />
-        )}
-        {state === "ready" && (
-          <Button
-            variant="secondary"
-            size="icon-sm"
-            className="absolute right-2 top-2 shadow-sm"
-            onClick={handleLocate}
-            aria-label="回到车辆位置"
-          >
-            <LocateFixedIcon />
-          </Button>
-        )}
+        >
+          <MapMarker longitude={longitude} latitude={latitude}>
+            <></>
+          </MapMarker>
+        </Map>
+        <Button
+          variant="secondary"
+          size="icon-sm"
+          className="absolute right-2 top-2 z-10 shadow-sm"
+          onClick={handleLocate}
+          aria-label="回到车辆位置"
+        >
+          <LocateFixedIcon />
+        </Button>
       </div>
-      {state === "error" && (
-        <Alert variant="destructive">
-          <AlertTitle>高德地图加载失败</AlertTitle>
-          <AlertDescription>请检查地图配置或网络连接后重试。</AlertDescription>
-        </Alert>
-      )}
     </div>
   )
 }

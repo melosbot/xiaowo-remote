@@ -21,7 +21,7 @@ export interface AmapMapInstance {
 declare global {
   interface Window {
     _AMapSecurityConfig?: {
-      securityJsCode: string
+      securityJsCode?: string
     }
   }
 }
