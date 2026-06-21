@@ -9,7 +9,7 @@ import { toast } from "sonner"
 import { useVehicleStatus } from "@/hooks/use-vehicle-status"
 import {
   Card,
-  CardAction,
+
   CardContent,
   CardDescription,
   CardHeader,
@@ -26,18 +26,6 @@ import { AmapMap } from "@/components/amap-map"
 import { getAmapMarkerUrl, isValidPosition, openAmapApp } from "@/lib/amap"
 import { cn } from "@/lib/utils"
 
-const FAILURE_LABELS: Record<string, string> = {
-  exterior: "车身状态",
-  health: "车辆健康",
-  fuel: "燃油信息",
-  odometer: "里程信息",
-  availability: "车辆可用性",
-  location: "车辆位置",
-  engine_status: "发动机状态",
-  preference: "车辆偏好",
-  climatization: "停车温控",
-  pre_cleaning: "车内净化",
-}
 
 function Stat({ label, value }: { label: string; value?: ReactNode }) {
   return (
@@ -155,6 +143,29 @@ export function StatusTab() {
 
   return (
     <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">
+          最后更新：
+          {new Date(data.updatedAt).toLocaleTimeString("zh-CN", {
+            hour12: false,
+          })}
+          {data.failures.length > 0 &&
+            ` · 部分不可用`}
+        </span>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-9 rounded-full"
+          disabled={loading}
+          onClick={handleRefresh}
+        >
+          {loading ? (
+            <Spinner />
+          ) : (
+            <RefreshCwIcon className="size-4" />
+          )}
+        </Button>
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>车辆概览</CardTitle>
@@ -162,21 +173,6 @@ export function StatusTab() {
             {data.seriesName} {data.modelName} ·{" "}
             {data.nickname || data.vin.slice(-6)}
           </CardDescription>
-          <CardAction>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={loading}
-              onClick={handleRefresh}
-            >
-              {loading ? (
-                <Spinner data-icon="inline-start" />
-              ) : (
-                <RefreshCwIcon data-icon="inline-start" />
-              )}
-              {loading ? "刷新中" : "刷新状态"}
-            </Button>
-          </CardAction>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="flex items-center gap-2">
@@ -546,16 +542,6 @@ export function StatusTab() {
         </CardContent>
       </Card>
 
-      <p className="text-center text-xs text-muted-foreground">
-        最后更新：
-        {new Date(data.updatedAt).toLocaleTimeString("zh-CN", {
-          hour12: false,
-        })}
-        {data.failures.length > 0 &&
-          ` · 部分数据暂不可用：${data.failures
-            .map((source) => FAILURE_LABELS[source] ?? "其他数据")
-            .join("、")}`}
-      </p>
     </div>
   )
 }

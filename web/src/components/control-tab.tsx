@@ -2,7 +2,7 @@ import { useState } from "react"
 import {
   LockIcon,
   UnlockIcon,
-  RefreshCwIcon,
+
   WindIcon,
   PowerIcon,
   CircleStopIcon,
@@ -26,7 +26,6 @@ import {
   CardAction,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -59,7 +58,7 @@ function cap(key: string, caps: Record<string, string> | null | undefined): "yes
 
 export function ControlTab() {
   const { api, sessionId, selectedVin } = useAuth()
-  const { data, loading, refresh } = useVehicleStatus()
+  const { data, refresh } = useVehicleStatus()
   const caps = data?.capabilities ?? null
   const [busy, setBusy] = useState<ActionState>({})
   const [duration, setDuration] = useState(15)
@@ -107,13 +106,6 @@ export function ControlTab() {
   const ctrl = (action: string, body?: unknown) =>
     api.control(sessionId!, selectedVin!, action, body)
 
-  const handleStatusRefresh = async () => {
-    setBusy((b) => ({ ...b, updateStatus: true }))
-    const refreshed = await refresh()
-    if (refreshed) toast.success("车辆状态已刷新")
-    else toast.error("暂时无法刷新车辆状态，请稍后重试")
-    setBusy((b) => ({ ...b, updateStatus: false }))
-  }
 
   if (!data) {
     return (
@@ -147,19 +139,9 @@ export function ControlTab() {
             </CardAction>
           </CardHeader>
           <CardContent>
-            <div className="flex gap-2">
+            {data.carLocked ? (
               <Button
-                variant={data.carLocked ? "outline" : "default"}
-                className="flex-1"
-                disabled={busy.lock || cap("lock", caps) === "maybe"}
-                onClick={() => request("lock", () => ctrl("lock"), "已发送锁车指令")}
-              >
-                {actionIcon("lock", LockIcon)}
-                锁车
-              </Button>
-              <Button
-                variant={data.carLocked ? "default" : "outline"}
-                className="flex-1"
+                className="w-full"
                 disabled={busy.unlock || cap("unlock", caps) === "maybe"}
                 onClick={() =>
                   request("unlock", () => ctrl("unlock"), "已发送解锁指令")
@@ -168,7 +150,17 @@ export function ControlTab() {
                 {actionIcon("unlock", UnlockIcon)}
                 解锁
               </Button>
-            </div>
+            ) : (
+              <Button
+                variant="secondary"
+                className="w-full"
+                disabled={busy.lock || cap("lock", caps) === "maybe"}
+                onClick={() => request("lock", () => ctrl("lock"), "已发送锁车指令")}
+              >
+                {actionIcon("lock", LockIcon)}
+                锁车
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}
@@ -436,29 +428,6 @@ export function ControlTab() {
         </Card>
       )}
 
-      {cap("updateStatus", caps) !== "no" && (
-      <Card>
-        <CardHeader>
-          <CardTitle>刷新车辆状态</CardTitle>
-          <CardDescription>从沃尔沃云端获取当前车辆状态</CardDescription>
-        </CardHeader>
-        <CardFooter>
-          <Button
-            variant="outline"
-            className="w-full"
-            disabled={busy.updateStatus || loading || cap("updateStatus", caps) === "maybe"}
-            onClick={handleStatusRefresh}
-          >
-            {busy.updateStatus || loading ? (
-              <Spinner data-icon="inline-start" />
-            ) : (
-              <RefreshCwIcon data-icon="inline-start" />
-            )}
-            {busy.updateStatus || loading ? "刷新中" : "刷新状态"}
-          </Button>
-        </CardFooter>
-      </Card>
-      )}
     </div>
 
       <AlertDialog open={pending !== null} onOpenChange={(open) => { if (!open) setPending(null) }}>
