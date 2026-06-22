@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -49,13 +48,12 @@ export function LoginGate() {
     <div className="flex min-h-svh items-center justify-center bg-background p-4">
       <Card className="page-enter w-full max-w-sm">
         <CardHeader className="items-center text-center">
-          <div className="flex size-12 items-center justify-center rounded-panel bg-primary/10 text-primary">
+          <div className="flex size-10 items-center justify-center rounded-panel bg-primary/10 text-primary">
             <VolvoLogo className="size-8 text-primary" />
           </div>
-          <CardTitle className="font-heading text-xl font-semibold">
+          <CardTitle className="font-heading text-xl font-medium">
             小沃远控
           </CardTitle>
-          <CardDescription>登录沃尔沃汽车 App 中国区账号</CardDescription>
         </CardHeader>
         <form onSubmit={submit} className="contents">
           <CardContent>

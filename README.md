@@ -1,6 +1,6 @@
 # 小沃远控
 
-面向沃尔沃中国区 SPA1 燃油车的非官方 Web/PWA 远程控制客户端。通过 Node.js 服务端代理沃尔沃私有 API，浏览器不直连车辆服务。
+面向沃尔沃中国区 SPA1 平台的非官方 Web/PWA 远程控制客户端。通过 Node.js 服务端代理沃尔沃私有 API，浏览器不直连车辆服务。支持燃油、纯电及插电混动车型。
 
 ## 免责声明
 
@@ -29,9 +29,9 @@
 ## 功能
 
 **状态查看**
-- 车辆概览：油量、续航、里程、平均油耗
+- 车辆概览：油量/电量、续航、里程、平均能耗，油量比例按车型精确油箱容量计算
 - 门窗状态：四门、发动机舱盖、尾门、天窗，支持微开检测
-- 车辆健康：保养提醒、制动液、冷却液、机油、清洗液、四轮胎压
+- 车辆健康：保养提醒、制动液、冷却液、机油、清洗液、四轮胎压、外部灯光故障
 - 实时位置（需配置高德地图）
 - 车内空气质量（AQI / PM2.5）
 - 驾驶统计（TM 累计 / TA 单次）
@@ -45,18 +45,27 @@
 - 车内空气净化启停
 - 主动刷新车辆状态
 
-控制按钮点击后弹出确认对话框，防止误触。状态更新采用事件驱动（首次进入 / 手动刷新 / 控制操作后），不进行定时轮询。
+控制按钮点击后弹出确认对话框，防止误触。状态轮询间隔 15±5 分钟随机。
+
+**会员与账户**
+- 账户概览：头像、昵称、会员等级、V 值余额、成长值进度
+- 每日签到
+- 数据缓存于本地，登录后即时拉取
 
 **能力感知**
 - 后端依据 VIN 向沃尔沃能力接口查询车辆支持的远程功能
 - 不支持的卡片在前端自动隐藏，未确认时按钮禁用
-- 车型与年款仅用于展示，不作为功能开关依据
+
+**TG 推送**
+- 可配置 Telegram Bot，离车时推送告警通知（未锁、窗未关等）
+- Bot Token 支持网页配置或环境变量注入
 
 **其他**
 - 深色模式支持
 - PWA 可安装到桌面
 - 多车辆切换
-- 登录状态与最近一次车辆状态持久化
+- 记住密码自动重登，服务重启无感恢复
+- 设置页可手动更新 PWA 数据，显示最后拉取时间
 
 ## 技术栈
 
@@ -79,29 +88,35 @@
 │       ├── components/           页面与 UI 组件
 │       │   ├── control-tab.tsx   控制页
 │       │   ├── status-tab.tsx    状态页
-│       │   └── settings-tab.tsx  设置页
-│       ├── hooks/                React hooks（认证、车辆状态）
-│       └── lib/                  工具库（API 客户端、认证、地图）
+│       │   └── settings-tab.tsx  设置页（含登录、车辆切换、地图/TG 配置）
+│       ├── hooks/                React hooks（认证、车辆状态、账户会员）
+│       └── lib/                  工具库（API 客户端、认证、地图、TG）
 ├── server/                       Express API 服务端
 │   └── src/
-│       ├── index.ts              Express 路由（含 demo 账号）
-│       ├── session.ts            会话管理
+│       ├── index.ts              Express 路由（含 demo 账号、REST + gRPC 代理）
+│       ├── session.ts            会话管理（持久化 + 自动恢复 + keepAlive）
+│       ├── session-store.ts      会话磁盘持久化
 │       └── volvo/
-│           ├── base.ts           DigitalVolvo REST 客户端
+│           ├── base.ts           DigitalVolvo REST 客户端（鉴权、账号、会员）
 │           ├── grpc.ts           SPA1 gRPC 客户端（9 个 status service + InvocationService）
 │           ├── signing.ts        HMAC-SHA256 签名
-│           ├── vehicle.ts        车辆状态聚合 + 控制指令
+│           ├── vehicle.ts        车辆状态聚合 + 控制指令 + 油箱容量表
 │           ├── capabilities.ts   能力查询 / 缓存 / 守卫
+│           ├── polling.ts        轮询告警（离车检测 + TG 推送）
+│           ├── tg-notify.ts      Telegram Bot 推送
+│           ├── settings-store.ts 用户设置按账号持久化
 │           ├── client-profile.ts 版本与 Header 集中配置
 │           └── demo.ts           Demo 数据
-├── apk/                          协议分析资料（APK 5.67.0 + 153 个 proto + 协议清单）
+├── demo/
+│   ├── run.sh                    本地开发脚本（start/stop/restart/rebuild/status/logs）
+│   └── data/                     运行时数据（PID、日志、会话、设置）
+├── tools/
+│   ├── apk/                      APK 5.67.0 反编译产物
+│   └── volvo-tool/               Python 命令行调试工具
 ├── docs/
-│   ├── pictures/                 应用截图
-│   └── protocol/
-│       └── spa1-header-matrix.md  SPA1 请求 Header 矩阵（脱敏）
-├── Dockerfile                    生产镜像构建
-└── plans/
-    └── PLAN.md                   实施计划与记录
+│   └── pictures/                 应用截图
+├── Dockerfile                    多阶段生产镜像
+└── plans/                        实施计划与记录
 ```
 
 ## 部署
@@ -154,11 +169,19 @@ docker run -d -p 8787:8787 -v "$(pwd)/volvo-data:/app/data" ghcr.io/melosbot/xia
 ```bash
 cd server && npm ci && cd ../web && npm ci
 
-# 终端 1
-cd server && npm run dev     # API → :8787
+# 一键启动
+./demo/run.sh start           # 安装依赖 → 构建前端 → 启动服务 → 前台运行
 
-# 终端 2
-cd web && npm run dev        # 前端 → :5173，自动代理 API
+# 其他命令
+./demo/run.sh restart         # 重启服务（不重建前端）
+./demo/run.sh rebuild         # 重装依赖 + 重建前端 + 重启
+./demo/run.sh stop            # 停止服务
+./demo/run.sh status          # 查看服务状态
+./demo/run.sh logs            # 查看最近 40 行日志
+
+# 或手动分端开发
+cd server && npm run dev      # API → :8787
+cd web && npm run dev         # 前端 → :5173，自动代理 API
 ```
 
 ## 环境变量
@@ -178,7 +201,8 @@ cd web && npm run dev        # 前端 → :5173，自动代理 API
 | `HOST` | `0.0.0.0` | 监听地址 |
 | `PORT` | `8787` | 监听端口 |
 | `WEB_ROOT` | `web/dist` | 前端静态文件目录 |
-| `DATA_DIR` | `./data` | 会话持久化目录 |
+| `DATA_DIR` | `./data` | 会话、设置持久化目录 |
+| `TG_BOT_TOKEN` | 空 | Telegram Bot Token（环境变量注入，优先级低于网页配置） |
 
 ## 检查
 
@@ -208,7 +232,8 @@ npm run typecheck && npm test
 ```
 
 - 服务端**从不将 Volvo 凭证下发到浏览器**，浏览器仅持有无意义的 `sessionId`
-- 服务端重启后所有会话丢失，需重新登录
+- 会话持久化至磁盘（`DATA_DIR/sessions.json`），服务重启后自动恢复，无需重新登录
+- 客户端自动检测会话失效并利用「记住密码」凭据静默重登，用户无感知
 - 浏览器持久化会话与最近车辆状态（localStorage）；启用「记住密码」后凭据也存入本地存储——**请勿在公共或他人设备上启用该选项**
 - 服务端可代发任意控制指令，**不应直接暴露到公网**
 
@@ -224,8 +249,9 @@ npm run typecheck && npm test
 
 ## 已知限制
 
-- 仅对接 SPA1/C3 平台，SPA2 车辆（新款纯电 / PHEV / EX 系列）暂不支持。
-- 功能可用性取决于车型配置、车机软件版本、账号权限与网络状态。项目通过 VIN 能力查询尽可能准确判断，但该接口尚未经抓包验证。
+- 仅对接 SPA1/C3 平台，SPA2 车辆（新款纯电 / EX 系列、hf_ 前缀 VIN）暂不支持。
+- 油箱/电池容量按车型规格表静态映射，部分车型可能未覆盖。
+- 功能可用性取决于车型配置、车机软件版本、账号权限与网络状态。
 - 沃尔沃私有接口可能随官方 App 更新而变化，届时状态读取或控制功能可能暂时失效。
 - 停车温控单独控制当前不可用；SPA1 燃油车通过远程启动联动空调。
 

@@ -11,9 +11,11 @@ import {
 import {
   createApi,
   loadAuth,
+  loadCredentials,
   saveAuth,
   clearAuth,
   clearVehicleStatusCache,
+  clearFetchThrottle,
   saveCredentials,
   clearCredentials,
   type BoundVehicle,
@@ -77,6 +79,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (phone: string, password: string, remember = false) => {
       const res = await api.login(phone, password)
       const selectedVin = res.vehicles[0]?.vinCode ?? ""
+      // 清除旧缓存 + 限流冷却期，确保登录后立即拉取最新数据
+      clearVehicleStatusCache()
+      clearFetchThrottle()
       setState({
         sessionId: res.sessionId,
         vehicles: res.vehicles,
@@ -141,13 +146,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (state.status !== "loading" || !state.sessionId) return
     let cancelled = false
-    api.validate(state.sessionId).then((valid) => {
+
+    async function validateOrRelogin() {
+      const valid = await api.validate(state.sessionId!)
       if (cancelled) return
+
       if (valid) {
         setState((prev) => ({ ...prev, status: "authed" }))
-      } else {
-        clearAuth()
-        clearVehicleStatusCache()
+        return
+      }
+
+      // 会话已失效，尝试用已保存的凭据自动重新登录
+      const creds = loadCredentials()
+      if (creds) {
+        try {
+          await login(creds.phone, creds.password, true)
+          console.log("[auth] auto-relogin succeeded")
+          return
+        } catch (err) {
+          console.warn("[auth] auto-relogin failed:", (err as Error).message)
+        }
+      }
+
+      // 自动重登也失败，退回登录页
+      // 注意：不清除凭据缓存（clearCredentials），
+      // 避免 API 偶发不可用时丢失已保存的密码
+      clearAuth()
+      clearVehicleStatusCache()
+      if (!cancelled) {
         setState({
           sessionId: null,
           vehicles: [],
@@ -157,11 +183,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           connection: "offline",
         })
       }
-    })
+    }
+
+    validateOrRelogin()
+
     return () => {
       cancelled = true
     }
-  }, [api, state.status, state.sessionId])
+  }, [api, state.status, state.sessionId, login])
 
   const value = useMemo<AuthContextValue>(
     () => ({ ...state, api, login, logout, selectVin, setConnection }),

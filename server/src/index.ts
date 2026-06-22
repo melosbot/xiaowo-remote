@@ -106,6 +106,8 @@ async function withSession<T>(
     const result = await fn(sessionId);
     res.json(result);
   } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[withSession] error: ${msg} (${err instanceof SessionError ? "SessionError" : err instanceof VolvoAPIError ? "VolvoAPIError" : typeof err})`);
     sendError(res, err);
   }
 }
@@ -139,9 +141,10 @@ app.get("/api/membership", async (req, res) => {
   if (!sessionId) { res.status(401).json({ error: "未登录" }); return }
   if (isDemo(sessionId)) {
     res.json({
-      vTotalValue: 0, vRestValue: 0, monthValue: 0,
-      expireTime: "", levelTitle: "Demo", levelNumber: 0,
-      levelProgress: 0, growthValue: 0, growthValueForUpgrade: 0,
+      vTotalValue: 8800, vRestValue: 3260, monthValue: 480,
+      expireTime: "2099/12/31", levelTitle: "白银会员", levelNumber: 2,
+      levelProgress: 0.62, growthValue: 3200, growthValueForUpgrade: 1800,
+      validGrowthValue: 3200,
       uniqueNumberCode: "",
     });
     return;
@@ -158,7 +161,7 @@ app.get("/api/membership", async (req, res) => {
 app.get("/api/membership/signin", async (req, res) => {
   const sessionId = String((req.query as AuthBody).session ?? "");
   if (!sessionId) { res.status(401).json({ error: "未登录" }); return }
-  if (isDemo(sessionId)) { res.json({ signInState: false, signInCount: 0 }); return }
+  if (isDemo(sessionId)) { res.json({ signInState: true, signInCount: 7 }); return }
   await withSession(req, res, async (sessionId) => {
     const base = getSessionBase(sessionId);
     if (!base) return null;

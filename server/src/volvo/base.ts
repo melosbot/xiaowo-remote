@@ -192,6 +192,10 @@ export class VehicleBaseAPI {
     const url = `${REST_BASE_URL}/app/membership/api/v2/getBasicMemberInfo`;
     const result = await this.requestDigitalvolvo("GET", url);
     const d = result?.data;
+    console.log(
+      `[membership] vRestValue=${d?.vRestValue} monthValue=${d?.monthValue} ` +
+      `levelTitle=${d?.levelTitle} levelProgress=${d?.levelProgress}`
+    );
     if (!d) return null;
     return {
       vTotalValue: Number(d.vTotalValue ?? 0),

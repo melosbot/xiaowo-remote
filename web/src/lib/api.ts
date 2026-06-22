@@ -243,6 +243,19 @@ export function markFetchDone(): void {
   localStorage.setItem(LAST_FETCH_KEY, String(Date.now()))
 }
 
+/** 清除刷新冷却期，登录后调用确即刻拉取 */
+export function clearFetchThrottle(): void {
+  localStorage.removeItem(LAST_FETCH_KEY)
+}
+
+/** 读取最后一次数据拉取时间戳 */
+export function lastFetchTime(): number | null {
+  try {
+    const v = localStorage.getItem(LAST_FETCH_KEY)
+    return v ? Number(v) : null
+  } catch { return null }
+}
+
 export function loadCachedProfile(): UserProfile | null {
   try {
     const raw = localStorage.getItem(PROFILE_CACHE_KEY)

@@ -1,15 +1,10 @@
 import { type ReactNode } from "react"
-import {
-  ExternalLinkIcon,
-  RefreshCwIcon,
-  FuelIcon,
-} from "lucide-react"
+import { ExternalLinkIcon, RefreshCwIcon, FuelIcon } from "lucide-react"
 import { useVehicleStatus } from "@/hooks/use-vehicle-status"
 import {
   Card,
-
+  CardAction,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
@@ -22,7 +17,6 @@ import { Empty, EmptyDescription, EmptyTitle } from "@/components/ui/empty"
 import { AmapMap } from "@/components/amap-map"
 import { getAmapMarkerUrl, isValidPosition, openAmapApp } from "@/lib/amap"
 import { cn } from "@/lib/utils"
-
 
 function Stat({ label, value }: { label: string; value?: ReactNode }) {
   return (
@@ -148,20 +142,24 @@ export function StatusTab() {
       <Card>
         <CardHeader>
           <CardTitle>车辆概览</CardTitle>
-          <CardDescription>
-            {data.seriesName} {data.modelName} ·{" "}
-            {data.nickname || data.vin.slice(-6)}
-          </CardDescription>
+          <CardAction>
+            <span className="text-xs text-muted-foreground">
+              {data.seriesName} {data.modelName} ·{" "}
+              {data.nickname || data.vin.slice(-6)}
+            </span>
+          </CardAction>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <div className="flex items-baseline justify-between">
               <span className="inline-flex items-baseline gap-1">
-                <FuelIcon className="size-[1.35rem] self-center text-muted-foreground" />
-                <span className="text-2xl font-semibold">
+                <FuelIcon className="size-5 self-center text-muted-foreground" />
+                <span className="text-xl font-semibold">
                   {data.fuel.amount}
                 </span>
-                <span className="text-sm text-muted-foreground">{energyUnit}</span>
+                <span className="text-sm text-muted-foreground">
+                  {energyUnit}
+                </span>
               </span>
               <span className="text-sm text-muted-foreground">
                 预计续航 {data.fuel.distanceToEmptyKm} km
@@ -301,12 +299,30 @@ export function StatusTab() {
           <CardTitle>门窗状态</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
-          {([
-            { pos: "左前", door: data.doors.frontLeft, win: data.windows.frontLeft },
-            { pos: "右前", door: data.doors.frontRight, win: data.windows.frontRight },
-            { pos: "左后", door: data.doors.rearLeft, win: data.windows.rearLeft },
-            { pos: "右后", door: data.doors.rearRight, win: data.windows.rearRight },
-          ] as const).map(({ pos, door, win }) => (
+          {(
+            [
+              {
+                pos: "左前",
+                door: data.doors.frontLeft,
+                win: data.windows.frontLeft,
+              },
+              {
+                pos: "右前",
+                door: data.doors.frontRight,
+                win: data.windows.frontRight,
+              },
+              {
+                pos: "左后",
+                door: data.doors.rearLeft,
+                win: data.windows.rearLeft,
+              },
+              {
+                pos: "右后",
+                door: data.doors.rearRight,
+                win: data.windows.rearRight,
+              },
+            ] as const
+          ).map(({ pos, door, win }) => (
             <div key={pos} className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">{pos}</span>
               <div className="flex gap-1">
@@ -427,7 +443,7 @@ export function StatusTab() {
                       <span
                         className={
                           warn
-                            ? "text-destructive font-medium"
+                            ? "font-medium text-destructive"
                             : "text-foreground"
                         }
                       >
@@ -446,13 +462,10 @@ export function StatusTab() {
         </CardContent>
       </Card>
 
-      {Object.entries(data.health.exteriorLights).some(
-        ([, v]) => v
-      ) && (
+      {Object.entries(data.health.exteriorLights).some(([, v]) => v) && (
         <Card>
           <CardHeader>
-            <CardTitle>车灯状态</CardTitle>
-            <CardDescription>以下车灯存在故障告警</CardDescription>
+            <CardTitle>外部灯光</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-x-4 gap-y-2">
@@ -483,13 +496,13 @@ export function StatusTab() {
           <Stat
             label="GCJ-02 坐标（经度 / 纬度）"
             value={
-              <span className="font-mono text-xs">
+              <span className="text-xs">
                 {data.position.longitude}, {data.position.latitude}
               </span>
             }
           />
           {isValidPosition(data.position.latitude, data.position.longitude) && (
-            <Button asChild variant="outline" size="sm">
+            <Button asChild variant="outline">
               <a
                 href={getAmapMarkerUrl(
                   data.position.latitude,
@@ -507,7 +520,6 @@ export function StatusTab() {
           )}
         </CardContent>
       </Card>
-
     </div>
   )
 }

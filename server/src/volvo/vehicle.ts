@@ -12,6 +12,115 @@ import {
   type RemoteEngineStatus,
 } from "./engine-status.js";
 
+// ---- SPA1 油箱/电池容量表 ----
+// 来源：车主手册 + 官方规格表。纯电车型（carType=electric）不在此表中，走独立默认值。
+
+type PowertrainKind = "fuel" | "phev";
+
+interface CapacityInfo {
+  fuelLiters: number;
+  batteryKwh: number | null;
+  powertrainKind: PowertrainKind;
+}
+
+const spa1CapacityMap: Record<string, CapacityInfo> = {
+  // XC90
+  XC90_B5: { fuelLiters: 71, batteryKwh: null, powertrainKind: "fuel" },
+  XC90_B6: { fuelLiters: 71, batteryKwh: null, powertrainKind: "fuel" },
+  XC90_T8: { fuelLiters: 71, batteryKwh: 18.8, powertrainKind: "phev" },
+  // XC60
+  XC60_B5: { fuelLiters: 71, batteryKwh: null, powertrainKind: "fuel" },
+  XC60_T8: { fuelLiters: 71, batteryKwh: 18.8, powertrainKind: "phev" },
+  // S90 / S90L
+  S90_B5:  { fuelLiters: 60, batteryKwh: null,  powertrainKind: "fuel" },
+  S90L_B5: { fuelLiters: 60, batteryKwh: null,  powertrainKind: "fuel" },
+  S90_T8:  { fuelLiters: 60, batteryKwh: 18.8, powertrainKind: "phev" },
+  S90L_T8:{ fuelLiters: 60, batteryKwh: 18.8, powertrainKind: "phev" },
+  // V90 / V90CC
+  V90_B5:   { fuelLiters: 60, batteryKwh: null,  powertrainKind: "fuel" },
+  V90_B6:   { fuelLiters: 60, batteryKwh: null,  powertrainKind: "fuel" },
+  V90_T6:   { fuelLiters: 60, batteryKwh: 18.8, powertrainKind: "phev" },
+  V90_T8:   { fuelLiters: 60, batteryKwh: 18.8, powertrainKind: "phev" },
+  V90CC_B5: { fuelLiters: 60, batteryKwh: null,  powertrainKind: "fuel" },
+  V90CC_B6: { fuelLiters: 60, batteryKwh: null,  powertrainKind: "fuel" },
+  // S60 / V60 / V60CC
+  S60_B5:   { fuelLiters: 60, batteryKwh: null,  powertrainKind: "fuel" },
+  S60_T8:   { fuelLiters: 60, batteryKwh: 18.8, powertrainKind: "phev" },
+  V60_B5:   { fuelLiters: 60, batteryKwh: null,  powertrainKind: "fuel" },
+  V60_T6:   { fuelLiters: 60, batteryKwh: 18.8, powertrainKind: "phev" },
+  V60_T8:   { fuelLiters: 60, batteryKwh: 18.8, powertrainKind: "phev" },
+  V60CC_B5:{ fuelLiters: 60, batteryKwh: null,  powertrainKind: "fuel" },
+  // Polestar 1
+  POLESTAR_1: { fuelLiters: 60, batteryKwh: 34, powertrainKind: "phev" },
+};
+
+/** 从型号名中提取动力变体代号，例如 "B5 四驱智远豪华版" → "B5" */
+function extractPowerVariant(modelName: string): string {
+  // 匹配常见的动力代号：B3/B4/B5/B6, T4/T5/T6/T8, D4/D5, P6/P8, POLESTAR_1
+  const m = modelName.match(/\b([BTDP]\d{1,2}|POLESTAR_\d)\b/i);
+  return m ? m[1].toUpperCase() : "";
+}
+
+/** 将 API 返回的 seriesName 规范化为查表键 */
+function normalizeSeries(seriesName: string): string {
+  return seriesName.trim().toUpperCase();
+}
+
+interface ResolvedCapacity {
+  fuelLiters: number;
+  batteryKwh: number | null;
+  powertrainKind: PowertrainKind | "electric";
+  variant: string;
+  key: string;
+}
+
+/** 根据车型信息查表获取油箱/电池容量 */
+function getSpa1Capacity(info: {
+  seriesName: string;
+  modelName: string;
+  carType?: unknown;
+}): ResolvedCapacity {
+  const carType = String((info as any).carType ?? "");
+  const series = normalizeSeries(String(info.seriesName ?? ""));
+  const model = String(info.modelName ?? "");
+
+  if (carType === "electric") {
+    return { fuelLiters: 78, batteryKwh: 78, powertrainKind: "electric", variant: "EV", key: `${series}_EV` };
+  }
+
+  const variant = extractPowerVariant(model);
+  const sn = variant ? `${series}_${variant}` : series;
+
+  const exact = spa1CapacityMap[sn];
+  if (exact) {
+    return { ...exact, variant, key: sn };
+  }
+
+  // 模糊匹配：seriesName 可能有多余后缀（如 "XC60 B5"），尝试前缀匹配
+  if (variant) {
+    for (const key of Object.keys(spa1CapacityMap)) {
+      const [mapSeries, mapVariant] = key.split("_");
+      if (mapVariant === variant && (series.startsWith(mapSeries) || mapSeries.startsWith(series))) {
+        const cap = spa1CapacityMap[key];
+        console.log(`[fuel] fuzzy match: api="${series}" variant="${variant}" → key="${key}"`);
+        return { ...cap, variant, key };
+      }
+    }
+  }
+
+  // 未匹配到 → 燃油车默认 60L
+  console.log(
+    `[fuel] no match for series="${series}" model="${model}" variant="${variant}" → default 60L`
+  );
+  return {
+    fuelLiters: 60,
+    batteryKwh: null,
+    powertrainKind: "fuel",
+    variant: variant || "?",
+    key: sn || "?",
+  };
+}
+
 const SERVICE_WARNING_MSG: Record<string, string> = {
   SERVICE_WARNING_UNSPECIFIED: "状态未知",
   SERVICE_WARNING_NO_WARNING: "无需保养",
@@ -441,16 +550,20 @@ export class VehicleController {
         const fm = ful ? Math.round(ful.fuelAmount * 100) / 100 : 0;
         const dte = ful?.distanceToEmptyKm ?? 0;
         const avg = ful?.TMFuelAvgConsum ?? 0;
-        // REST 车辆列表 38 个字段实测不含油箱容量。
-        // 从当前油量 + 续航推算（满油时 fuelAmount 最接近真实容量）。
-        const estimated = fm > 0 && dte > 0 && avg > 0
-          ? fm + (dte / 100) * avg
-          : 71;
+        // SPA1 gRPC 不返回油箱/电池容量，使用型号查表获取精确值。
+        // 表中未覆盖的燃油车默认 60L，纯电默认 78kWh。
+        const cap = getSpa1Capacity(this.info);
+        const tankCapacity = cap.fuelLiters;
+        console.log(
+          `[fuel] amount=${fm} dte=${dte} tank=${tankCapacity} ` +
+          `ratio=${tankCapacity > 0 ? Math.round((fm / tankCapacity) * 100) : 0}% ` +
+          `key=${cap.key}`
+        );
         return {
           amount: fm,
           distanceToEmptyKm: dte,
           avgConsumptionL100Km: avg,
-          tankCapacity: Math.max(fm, Math.round(estimated)) || 71,
+          tankCapacity,
         };
       })(),
       odometerKm: odo ? Number(odo.odometerMeters) / 1000 : 0,

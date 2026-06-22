@@ -50,13 +50,16 @@ export function AmapMap({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="relative h-56 overflow-hidden rounded-lg border">
+      <div className="relative h-56 overflow-hidden rounded-control border">
         <Map
           ref={mapRef}
           center={[longitude, latitude]}
           zoom={16}
           viewMode="2D"
-          styles={{ light: "amap://styles/whitesmoke", dark: "amap://styles/dark" }}
+          styles={{
+            light: "amap://styles/whitesmoke",
+            dark: "amap://styles/dark",
+          }}
           amapKey={config.key}
           securityJsCode={config.securityJsCode}
           className="size-full"

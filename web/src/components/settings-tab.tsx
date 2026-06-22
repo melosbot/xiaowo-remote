@@ -1,27 +1,22 @@
 import { useState, useEffect, type FormEvent } from "react"
 import {
   LogInIcon,
+  RefreshCwIcon,
   RotateCcwIcon,
   SaveIcon,
   FlaskConicalIcon,
-  SendIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth"
 import { useAccount } from "@/hooks/use-account"
 import { useVehicleStatus } from "@/hooks/use-vehicle-status"
-import { loadCredentials } from "@/lib/api"
+import { lastFetchTime, loadCredentials } from "@/lib/api"
 import { ProfileStatusCard } from "@/components/profile-status-card"
-import {
-  clearAmapConfig,
-  loadAmapConfig,
-  saveAmapConfig,
-} from "@/lib/amap"
+import { clearAmapConfig, loadAmapConfig, saveAmapConfig } from "@/lib/amap"
 import { loadTgConfig, saveTgConfig } from "@/lib/tg"
 import {
   Card,
   CardContent,
-  CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
@@ -44,8 +39,16 @@ import {
 } from "@/components/ui/select"
 
 export function SettingsTab() {
-  const { api, sessionId, vehicles, selectedVin, phone, selectVin, login, logout } =
-    useAuth()
+  const {
+    api,
+    sessionId,
+    vehicles,
+    selectedVin,
+    phone,
+    selectVin,
+    login,
+    logout,
+  } = useAuth()
   const { data } = useVehicleStatus()
   const {
     account,
@@ -74,6 +77,8 @@ export function SettingsTab() {
   const [tgChatId, setTgChatId] = useState("")
   const [tgSaving, setTgSaving] = useState(false)
   const [tgTesting, setTgTesting] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const [lastFetch, setLastFetch] = useState(() => lastFetchTime())
   const [tgTokenSaving, setTgTokenSaving] = useState(false)
   const [tgStatus, setTgStatus] = useState<{
     configured: boolean
@@ -82,7 +87,10 @@ export function SettingsTab() {
   } | null>(null)
   // 从服务端拉取设置（跟随账号）
   useEffect(() => {
-    api.getTgStatus().then(setTgStatus).catch(() => {})
+    api
+      .getTgStatus()
+      .then(setTgStatus)
+      .catch(() => {})
     if (!sessionId) return
     api
       .getSettings(sessionId)
@@ -112,7 +120,9 @@ export function SettingsTab() {
         await api.setTgToken("")
         const status = await api.getTgStatus()
         setTgStatus(status)
-        toast.success(status.configured ? "已回退到环境变量配置" : "Bot Token 已清除")
+        toast.success(
+          status.configured ? "已回退到环境变量配置" : "Bot Token 已清除"
+        )
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "操作失败")
       } finally {
@@ -128,7 +138,9 @@ export function SettingsTab() {
       if (result.verified) {
         toast.success(`Bot Token 已保存 · @${result.username}`)
       } else {
-        toast.warning("Token 已保存到服务端，但 Telegram 验证未通过，请检查是否正确")
+        toast.warning(
+          "Token 已保存到服务端，但 Telegram 验证未通过，请检查是否正确"
+        )
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "保存失败")
@@ -181,7 +193,9 @@ export function SettingsTab() {
       await api.testTgPush(tgChatId.trim())
       toast.success("测试消息已发送，请检查 Telegram")
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "推送测试失败，请检查 Chat ID")
+      toast.error(
+        err instanceof Error ? err.message : "推送测试失败，请检查 Chat ID"
+      )
     } finally {
       setTgTesting(false)
     }
@@ -240,7 +254,10 @@ export function SettingsTab() {
       saveAmapConfig({ key, securityJsCode })
       // 持久化到服务端（跟随账号）
       if (sessionId) {
-        await api.saveSettings(sessionId, { amapKey: key, amapSecurityCode: securityJsCode })
+        await api.saveSettings(sessionId, {
+          amapKey: key,
+          amapSecurityCode: securityJsCode,
+        })
       }
       toast.success("高德地图配置已保存" + (sessionId ? "到账号" : ""))
     } catch (err) {
@@ -262,6 +279,26 @@ export function SettingsTab() {
     }
   }
 
+  const handleRefreshAll = async () => {
+    setRefreshing(true)
+    try {
+      window.dispatchEvent(new CustomEvent("volvo-refresh"))
+      await new Promise((r) => setTimeout(r, 2000))
+      setLastFetch(lastFetchTime())
+      toast.success("数据已更新")
+    } catch {
+      toast.error("刷新失败")
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  const fmtLastFetch = (ts: number | null) => {
+    if (!ts) return "从未"
+    const d = new Date(ts)
+    return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {sessionId ? (
@@ -278,8 +315,7 @@ export function SettingsTab() {
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>账号与登录</CardTitle>
-            <CardDescription>管理沃尔沃汽车 App 中国区账号</CardDescription>
+            <CardTitle>账号登录</CardTitle>
           </CardHeader>
           <form onSubmit={handleLogin} className="contents">
             <CardContent>
@@ -305,7 +341,9 @@ export function SettingsTab() {
                   />
                 </Field>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">记住密码</span>
+                  <span className="text-sm text-muted-foreground">
+                    记住密码
+                  </span>
                   <Switch checked={remember} onCheckedChange={setRemember} />
                 </div>
               </FieldGroup>
@@ -328,7 +366,6 @@ export function SettingsTab() {
         <Card>
           <CardHeader>
             <CardTitle>我的车辆</CardTitle>
-            <CardDescription>选择车辆并查看基础信息</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <Select value={selectedVin ?? undefined} onValueChange={selectVin}>
@@ -362,10 +399,12 @@ export function SettingsTab() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">VIN 码</span>
-                  <span className="text-sm font-mono">{data.vehicleInfo.vin}</span>
+                  <span className="text-sm">{data.vehicleInfo.vin}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">车辆年款</span>
+                  <span className="text-sm text-muted-foreground">
+                    车辆年款
+                  </span>
                   <span className="text-sm">
                     {data.vehicleInfo.modelYear
                       ? `${data.vehicleInfo.modelYear}款`
@@ -373,7 +412,9 @@ export function SettingsTab() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">购车时间</span>
+                  <span className="text-sm text-muted-foreground">
+                    购车时间
+                  </span>
                   <span className="text-sm">
                     {data.vehicleInfo.buyDate
                       ? data.vehicleInfo.buyDate.split(" ")[0]
@@ -381,7 +422,9 @@ export function SettingsTab() {
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">动力类型</span>
+                  <span className="text-sm text-muted-foreground">
+                    动力类型
+                  </span>
                   <span className="text-sm">
                     {data.vehicleInfo.carType === "fuel"
                       ? "汽油"
@@ -393,7 +436,9 @@ export function SettingsTab() {
                     <span className="text-sm text-muted-foreground">
                       外观颜色
                     </span>
-                    <span className="text-sm">{data.vehicleInfo.outerColor}</span>
+                    <span className="text-sm">
+                      {data.vehicleInfo.outerColor}
+                    </span>
                   </div>
                 )}
                 {data.vehicleInfo.innerColor && (
@@ -401,7 +446,9 @@ export function SettingsTab() {
                     <span className="text-sm text-muted-foreground">
                       内饰颜色
                     </span>
-                    <span className="text-sm">{data.vehicleInfo.innerColor}</span>
+                    <span className="text-sm">
+                      {data.vehicleInfo.innerColor}
+                    </span>
                   </div>
                 )}
               </div>
@@ -413,9 +460,6 @@ export function SettingsTab() {
       <Card>
         <CardHeader>
           <CardTitle>高德地图</CardTitle>
-          <CardDescription>
-            用于显示车辆位置，配置仅保存在当前浏览器中
-          </CardDescription>
         </CardHeader>
         <form onSubmit={handleAmapSave} className="contents">
           <CardContent>
@@ -478,12 +522,7 @@ export function SettingsTab() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Telegram 推送</CardTitle>
-          <CardDescription>
-            离车告警通知。Bot Token 也可通过服务端环境变量
-            <code className="mx-1 text-xs">TG_BOT_TOKEN</code>
-            持久化配置。
-          </CardDescription>
+          <CardTitle>TG 推送</CardTitle>
         </CardHeader>
         <CardContent>
           <FieldGroup className="gap-4">
@@ -494,7 +533,11 @@ export function SettingsTab() {
                   id="tg-token"
                   type="password"
                   autoComplete="new-password"
-                  placeholder={tgStatus?.configured ? tgStatus.tokenHint : "从 @BotFather 获取"}
+                  placeholder={
+                    tgStatus?.configured
+                      ? tgStatus.tokenHint
+                      : "从 @BotFather 获取"
+                  }
                   value={tgToken}
                   onChange={(e) => setTgToken(e.target.value)}
                 />
@@ -505,7 +548,11 @@ export function SettingsTab() {
                   className="shrink-0"
                 >
                   {tgTokenSaving ? <Spinner data-icon="inline-start" /> : null}
-                  {tgToken.trim() ? "保存" : tgStatus?.source === "ui" ? "清除" : "保存"}
+                  {tgToken.trim()
+                    ? "保存"
+                    : tgStatus?.source === "ui"
+                      ? "清除"
+                      : "保存"}
                 </Button>
               </div>
             </Field>
@@ -542,9 +589,9 @@ export function SettingsTab() {
             {tgTesting ? (
               <Spinner data-icon="inline-start" />
             ) : (
-              <SendIcon data-icon="inline-start" />
+              <FlaskConicalIcon data-icon="inline-start" />
             )}
-            测试推送
+            测试
           </Button>
           <Button disabled={tgSaving} onClick={handleTgSave}>
             {tgSaving ? (
@@ -552,7 +599,7 @@ export function SettingsTab() {
             ) : (
               <SaveIcon data-icon="inline-start" />
             )}
-            保存 Chat ID
+            保存
           </Button>
         </CardFooter>
       </Card>
@@ -571,13 +618,27 @@ export function SettingsTab() {
             <span>沃尔沃中国 API</span>
           </div>
           <Separator />
-          <p className="text-xs">
-            应用通过服务端连接沃尔沃中国
-            API。登录密码仅在开启“记住密码”时保存在当前浏览器，会话信息仅存储在当前设备。
-          </p>
+          <div className="flex items-center justify-between">
+            <span>最后拉取</span>
+            <Badge variant="secondary">{fmtLastFetch(lastFetch)}</Badge>
+          </div>
         </CardContent>
+        <CardFooter>
+          <Button
+            variant="outline"
+            className="w-full"
+            disabled={refreshing}
+            onClick={handleRefreshAll}
+          >
+            {refreshing ? (
+              <Spinner data-icon="inline-start" />
+            ) : (
+              <RefreshCwIcon data-icon="inline-start" />
+            )}
+            更新 PWA 数据
+          </Button>
+        </CardFooter>
       </Card>
-
     </div>
   )
 }

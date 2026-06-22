@@ -76,10 +76,10 @@ export function ProfileStatusCard({
         <CardHeader>
           <Skeleton className="h-5 w-28" />
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex items-center gap-3">
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex items-center gap-2">
             <Skeleton className="size-12 rounded-panel" />
-            <div className="flex flex-1 flex-col gap-1.5">
+            <div className="flex flex-1 flex-col gap-2">
               <Skeleton className="h-4 w-24" />
               <Skeleton className="h-3.5 w-32" />
             </div>
@@ -92,8 +92,8 @@ export function ProfileStatusCard({
           <Skeleton className="h-1 w-full" />
         </CardContent>
         <CardFooter className="grid grid-cols-2 gap-2">
-          <Skeleton className="h-9 w-full" />
-          <Skeleton className="h-9 w-full" />
+          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-8 w-full" />
         </CardFooter>
       </Card>
     )
@@ -101,26 +101,30 @@ export function ProfileStatusCard({
 
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between">
-        <CardTitle>账户与会员</CardTitle>
-        <Badge variant="secondary">{levelTitle}</Badge>
+      <CardHeader>
+        <CardTitle>账户概览</CardTitle>
       </CardHeader>
 
-      <CardContent className="space-y-3">
-        <div className="flex items-center gap-3">
+      <CardContent className="flex flex-col gap-4">
+        <div className="flex items-center gap-2">
           <Avatar className="size-12 rounded-panel border">
             <AvatarImage src={account?.headPortrait} alt={displayName} />
-            <AvatarFallback className="rounded-panel bg-primary/10 text-primary text-base font-semibold">
+            <AvatarFallback className="rounded-panel bg-primary/10 text-base font-semibold text-primary">
               {fallback}
             </AvatarFallback>
           </Avatar>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-base font-semibold">
-              {displayName}
+          <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+            <div className="flex min-w-0 flex-col">
+              <div className="truncate text-base font-semibold">
+                {displayName}
+              </div>
+              <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                {mobile}
+              </p>
             </div>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">
-              {mobile}
-            </p>
+            <Badge variant="secondary" className="shrink-0">
+              {levelTitle}
+            </Badge>
           </div>
         </div>
 
@@ -150,7 +154,7 @@ export function ProfileStatusCard({
             还差 {growthValueForUpgrade}
           </span>
         </div>
-        <div className="space-y-1.5">
+        <div className="flex flex-col gap-2">
           <Progress value={progress} />
           <div className="flex items-center justify-between text-xs text-muted-foreground">
             <span>本月签到 {signInCount} 次</span>
@@ -174,11 +178,7 @@ export function ProfileStatusCard({
           )}
           {signed ? "今日已签" : "签到"}
         </Button>
-        <Button
-          variant="destructive"
-          disabled={loggingOut}
-          onClick={onLogout}
-        >
+        <Button variant="destructive" disabled={loggingOut} onClick={onLogout}>
           {loggingOut ? (
             <Spinner data-icon="inline-start" />
           ) : (

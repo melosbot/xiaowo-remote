@@ -41,7 +41,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-20 flex h-header items-center gap-2 border-b bg-background/95 px-4 backdrop-blur supports-backdrop-filter:bg-background/80">
-      <div className="flex items-center gap-2 font-heading font-semibold">
+      <div className="flex items-center gap-2 font-heading font-medium">
         <VolvoLogo className="size-5 text-primary" />
         <span>小沃远控</span>
       </div>
