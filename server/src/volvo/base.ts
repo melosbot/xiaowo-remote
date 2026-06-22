@@ -1,7 +1,7 @@
+import { log } from "./log.js";
 import { signRequest } from "./signing.js";
 import {
   REST_BASE_URL,
-  REST_HOST,
   REST_BASE_HEADERS,
   REST_USER_AGENT,
 } from "./client-profile.js";
@@ -79,11 +79,6 @@ export class VehicleBaseAPI {
 
   get vocapiToken(): string {
     return this.vocapiAccessToken;
-  }
-
-  /** REST DigitalVolvo access token（Bearer） */
-  get dvAccessToken(): string {
-    return this.digitalvolvoAccessToken;
   }
 
   /** REST X-Token（JWT） */
@@ -193,10 +188,7 @@ export class VehicleBaseAPI {
     const url = `${REST_BASE_URL}/app/membership/api/v2/getBasicMemberInfo`;
     const result = await this.requestDigitalvolvo("GET", url);
     const d = result?.data;
-    console.log(
-      `[membership] vRestValue=${d?.vRestValue} monthValue=${d?.monthValue} ` +
-      `levelTitle=${d?.levelTitle} levelProgress=${d?.levelProgress}`
-    );
+    log.info("membership", `vRestValue=${d?.vRestValue} monthValue=${d?.monthValue} levelTitle=${d?.levelTitle} levelProgress=${d?.levelProgress}`);
     if (!d) return null;
     return {
       vTotalValue: Number(d.vTotalValue ?? 0),
@@ -248,20 +240,20 @@ export class VehicleBaseAPI {
 
     // 尝试执行签到——POST /app/app/newSign/signIn 可能既是查询也是执行
     // 签到时传额外字段触发，具体格式明天未签时抓日志确认
-    console.log("[sign-in] attempting sign-in for memberId:", memberId);
+    log.info("sign-in", `attempting for memberId=${memberId}`);
 
     // 尝试 1: 基础 memberId
     const url = `${REST_BASE_URL}/app/app/newSign/signIn`;
     let result = await this.requestDigitalvolvo("POST", url, { memberId });
-    console.log("[sign-in] POST {memberId} →", JSON.stringify(result?.data).slice(0, 300));
+    log.info("sign-in", `POST {memberId} → ${JSON.stringify(result?.data).slice(0, 300)}`);
 
     // 尝试 2: 加 channel
     result = await this.requestDigitalvolvo("POST", url, { memberId, channel: "app" });
-    console.log("[sign-in] POST {memberId, channel} →", JSON.stringify(result?.data).slice(0, 300));
+    log.info("sign-in", `POST {memberId, channel} → ${JSON.stringify(result?.data).slice(0, 300)}`);
 
     // 尝试 3: signIn flag
     result = await this.requestDigitalvolvo("POST", url, { memberId, signIn: 1 });
-    console.log("[sign-in] POST {memberId, signIn:1} →", JSON.stringify(result?.data).slice(0, 300));
+    log.info("sign-in", `POST {memberId, signIn:1} → ${JSON.stringify(result?.data).slice(0, 300)}`);
 
     // 重新查状态
     return this.getSignInStatus(memberId);

@@ -186,8 +186,8 @@ const Map = forwardRef<MapRef, MapProps>(function Map(
   useEffect(() => {
     if (!containerRef.current) return
 
-    const key = amapKey ?? "983f0d71329b83141e06427729399d5e"
-    const code = securityJsCode ?? "0105e3185f27b87d2aab3c2bad23fc86"
+    const key = amapKey ?? ""
+    const code = securityJsCode ?? ""
     if (code) {
       window._AMapSecurityConfig = { securityJsCode: code }
     }

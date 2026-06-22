@@ -5,6 +5,7 @@ import rateLimit from "express-rate-limit";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { log } from "./volvo/log.js";
 import {
   createSession,
   ensureFreshTokens,
@@ -70,16 +71,16 @@ const loginLimiter = rateLimit({
   message: { error: "登录尝试过多，请 15 分钟后再试" },
 });
 
-// 请求日志：记录所有 /api/ 请求，脱敏敏感字段
+// 请求日志（仅 VERBOSE=1 时输出）
 app.use((req, _res, next) => {
   if (req.path.startsWith("/api/")) {
     if (req.method === "POST" || req.method === "PUT") {
       const safe = { ...(req.body ?? {}) };
       if ("password" in safe) safe.password = "***";
       if ("token" in safe) safe.token = "***";
-      console.log(`[req] ${req.method} ${req.path} ${JSON.stringify(safe).slice(0, 500)}`);
+      log.info("req", `${req.method} ${req.path} ${JSON.stringify(safe).slice(0, 500)}`);
     } else {
-      console.log(`[req] ${req.method} ${req.path}`);
+      log.info("req", `${req.method} ${req.path}`);
     }
   }
   next();
@@ -129,7 +130,7 @@ async function withSession<T>(
     res.json(result);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[withSession] error: ${msg} (${err instanceof SessionError ? "SessionError" : err instanceof VolvoAPIError ? "VolvoAPIError" : typeof err})`);
+    log.error("withSession", `${msg} (${err instanceof SessionError ? "SessionError" : err instanceof VolvoAPIError ? "VolvoAPIError" : typeof err})`);
     sendError(res, err);
   }
 }
@@ -244,20 +245,6 @@ app.get("/api/session/validate", async (req, res) => {
   if (isDemo(sessionId)) { res.json({ valid: demoStore.has(sessionId) }); return }
   const valid = await validateSession(sessionId);
   res.json({ valid });
-});
-
-app.get("/api/vehicles", async (req, res) => {
-  const sessionId = String((req.query as AuthBody).session ?? "");
-  if (isDemo(sessionId)) {
-    const d = demoStore.get(sessionId);
-    if (!d) { res.status(401).json({ error: "登录状态已失效" }); return }
-    res.json({ vehicles: d.vehicles.map(v => v.vinCode) });
-    return;
-  }
-  await withSession(req, res, async (sessionId) => {
-    const session = getSession(sessionId);
-    return { vehicles: [...session.vehicles.values()].map((c) => c.vin) };
-  });
 });
 
 app.get("/api/vehicles/:vin/status", async (req, res) => {
@@ -446,7 +433,7 @@ const HOST = process.env.HOST ?? "0.0.0.0";
 
 restoreSessions().then(() => {
   app.listen(PORT, HOST, () => {
-    console.log(`Volvo proxy listening on http://${HOST}:${PORT}`);
+    log.startup("server", `listening on http://${HOST}:${PORT}`);
   });
 
 });

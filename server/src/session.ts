@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { VehicleBaseAPI, type BoundVehicle, type UserProfile } from "./volvo/base.js";
 import { VehicleController } from "./volvo/vehicle.js";
+import { log } from "./volvo/log.js";
 import {
   persistSession,
   removePersistedSession,
@@ -34,16 +35,13 @@ async function initSession(
     const ctrl = new VehicleController(base, info);
     controllers.set(info.vinCode, ctrl);
     ctrl.fetchCapabilities().catch((err) => {
-      console.error(
-        `[session] capability fetch failed for ${info.vinCode.slice(-6)}:`,
-        (err as Error).message,
-      );
+      log.warn("session", `capability fetch failed for ${info.vinCode.slice(-6)}: ${(err as Error).message}`);
     });
   }
 
   const keepAlive = setInterval(() => {
     void keepAliveTokens(sid).catch((err) => {
-      console.error(`[keepalive] session ${sid.slice(0, 8)} failed:`, err);
+      log.error("keepalive", `session ${sid.slice(0, 8)} failed: ${err}`);
     });
   }, KEEPALIVE_INTERVAL_MS);
   keepAlive.unref();
@@ -78,18 +76,15 @@ export async function restoreSessions(): Promise<void> {
   for (const s of stored) {
     try {
       await initSession(s.phone, s.password, s.sessionId);
-      console.log(`[session] restored ${s.sessionId.slice(0, 8)}`);
+      log.startup("session", `restored ${s.sessionId.slice(0, 8)}`);
     } catch (err) {
       // 恢复失败删除磁盘备份，客户端自动重登会创建新会话
-      console.error(
-        `[session] restore failed for ${s.sessionId.slice(0, 8)}:`,
-        (err as Error).message,
-      );
+      log.warn("session", `restore failed for ${s.sessionId.slice(0, 8)}: ${(err as Error).message}`);
       removePersistedSession(s.sessionId);
     }
   }
   if (stored.length > 0) {
-    console.log(`[session] restored ${sessions.size}/${stored.length} sessions`);
+    log.startup("session", `restored ${sessions.size}/${stored.length} sessions`);
   }
 }
 
@@ -130,10 +125,7 @@ export async function validateSession(sessionId: string): Promise<boolean> {
     await s.base.updateToken();
     return true;
   } catch (err) {
-    console.error(
-      `[session] validate failed for ${sessionId.slice(0, 8)}:`,
-      (err as Error).message,
-    );
+    log.warn("session", `validate failed for ${sessionId.slice(0, 8)}: ${(err as Error).message}`);
     return false;
   }
 }

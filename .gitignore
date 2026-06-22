@@ -29,10 +29,8 @@ pnpm-debug.log*
 *.swo
 
 # AI coding assistant metadata
-CLAUDE.md
 .agents/
 .codex/
-plans/
 
 # Runtime data
 demo/data/

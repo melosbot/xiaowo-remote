@@ -73,7 +73,7 @@
 | 测试 | Vitest |
 | 部署 | 多阶段 Docker 镜像 |
 
-当前仅对接 SPA1 平台（沃尔沃中国区 C3 燃油车）。SPA2 协议已通过 APK 5.67.0 反编译完成分析（详见 `apk/PROTOCOL_INVENTORY.md`），但尚未接入。
+当前仅对接 SPA1 平台（沃尔沃中国区 C3 燃油车）。SPA2 协议已通过 APK 5.67.0 反编译完成分析（详见 `tools/spa1-api-reference.md`），但尚未接入。
 
 ## 项目结构
 

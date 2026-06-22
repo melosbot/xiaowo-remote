@@ -399,12 +399,6 @@ export function createApi(baseUrl: string) {
       )
       return r.status
     },
-    async refreshFromCar(sessionId: string, vin: string): Promise<void> {
-      await request(`${base}/api/vehicles/${encodeURIComponent(vin)}/refresh`, {
-        method: "POST",
-        body: JSON.stringify({ session: sessionId }),
-      })
-    },
     async control(
       sessionId: string,
       vin: string,
@@ -418,15 +412,6 @@ export function createApi(baseUrl: string) {
           body: JSON.stringify({ session: sessionId, ...(body ?? {}) }),
         }
       )
-    },
-    async getCapabilities(
-      sessionId: string,
-      vin: string,
-    ): Promise<VehicleStatus["capabilities"]> {
-      const r = await request<{ capabilities: VehicleStatus["capabilities"] }>(
-        `${base}/api/vehicles/${encodeURIComponent(vin)}/capabilities?session=${encodeURIComponent(sessionId)}`
-      )
-      return r.capabilities
     },
     async getAccount(sessionId: string): Promise<UserProfile | null> {
       const data = await request<UserProfile>(

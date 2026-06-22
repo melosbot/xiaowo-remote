@@ -1,3 +1,4 @@
+import { log } from "./log.js";
 /**
  * 用户设置持久化
  *
@@ -34,7 +35,7 @@ function readStore(): Record<string, UserSettings> {
     if (!data || typeof data !== "object" || Array.isArray(data)) return {};
     return data as Record<string, UserSettings>;
   } catch (err) {
-    console.error("[settings-store] read failed:", (err as Error).message);
+    log.error("settings-store", `read failed: ${(err as Error).message}`);
     return {};
   }
 }
@@ -44,7 +45,7 @@ function writeStore(data: Record<string, UserSettings>): void {
     ensureDir();
     writeFileSync(STORE_FILE, JSON.stringify(data), { mode: 0o600 });
   } catch (err) {
-    console.error("[settings-store] write failed:", (err as Error).message);
+    log.error("settings-store", `write failed: ${(err as Error).message}`);
   }
 }
 

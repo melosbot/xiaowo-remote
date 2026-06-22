@@ -1,3 +1,4 @@
+import { log } from "./log.js";
 /**
  * SPA1 VIN capability 模型
  *
@@ -131,7 +132,7 @@ export function mapResponseToCapabilities(
  * 当前请求结构基于 APK 5.67.0 `apac_capability` 模块推断。
  * 实际请求体格式需以抓包确认为准；若响应不可解析则退化为全量 unknown。
  */
-export async function fetchCapabilities(
+async function fetchCapabilities(
   vin: string,
   accessToken: string,
   xToken: string,
@@ -203,7 +204,7 @@ export async function getCapabilities(
     const cached = getCachedCapabilities(vin);
     return cached ?? null;
   } catch (err) {
-    console.error(`[capability] fetch failed for ${vin.slice(-6)}:`, err);
+    log.warn("capability", `fetch failed for ${vin.slice(-6)}: ${err}`);
     const cached = getCachedCapabilities(vin);
     return cached ?? null;
   }

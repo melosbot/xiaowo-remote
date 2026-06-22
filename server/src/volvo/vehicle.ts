@@ -1,3 +1,4 @@
+import { log } from "./log.js";
 import { VehicleBaseAPI, type BoundVehicle } from "./base.js";
 import { VehicleGrpcAPI } from "./grpc.js";
 import {
@@ -102,14 +103,14 @@ function getSpa1Capacity(info: {
       const [mapSeries, mapVariant] = key.split("_");
       if (mapVariant === variant && (series.startsWith(mapSeries) || mapSeries.startsWith(series))) {
         const cap = spa1CapacityMap[key];
-        console.log(`[fuel] fuzzy match: api="${series}" variant="${variant}" → key="${key}"`);
+        log.info('fuel', ` fuzzy match: api="${series}" variant="${variant}" → key="${key}"`);
         return { ...cap, variant, key };
       }
     }
   }
 
   // 未匹配到 → 燃油车默认 60L
-  console.log(
+  log.info("fuel", 
     `[fuel] no match for series="${series}" model="${model}" variant="${variant}" → default 60L`
   );
   return {
@@ -533,7 +534,7 @@ export class VehicleController {
         // 表中未覆盖的燃油车默认 60L，纯电默认 78kWh。
         const cap = getSpa1Capacity(this.info);
         const tankCapacity = cap.fuelLiters;
-        console.log(
+        log.info("fuel", 
           `[fuel] amount=${fm} dte=${dte} tank=${tankCapacity} ` +
           `ratio=${tankCapacity > 0 ? Math.round((fm / tankCapacity) * 100) : 0}% ` +
           `key=${cap.key}`
@@ -773,10 +774,7 @@ export class VehicleController {
    */
   private triggerStatusRefresh(): void {
     this.grpc.updateStatus(this.vin).catch((err) => {
-      console.error(
-        `[updateStatus] refresh failed for ${this.vin.slice(-6)}:`,
-        (err as Error).message,
-      );
+      log.warn("vehicle", `[updateStatus] refresh failed for ${this.vin.slice(-6)}: ${(err as Error).message}`);
     });
   }
 

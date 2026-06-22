@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as grpc from "@grpc/grpc-js";
 import * as protoLoader from "@grpc/proto-loader";
+import { log } from "./log.js";
 import {
   GRPC_MAIN_HOST,
   GRPC_LBS_HOST,
@@ -232,11 +233,39 @@ export class InvocationError extends Error {}
 
 const SUCCESS_STATUSES = new Set(["SUCCESS", "SENT", "DELIVERED"]);
 
+/** gRPC 错误码 → 中文消息 */
+function mapGrpcError(err: any): InvocationError {
+  const code = err?.code as number | undefined;
+  const detail = (err?.details ?? err?.message ?? "") as string;
+  switch (code) {
+    case 1: // CANCELLED
+      return new InvocationError("请求已取消");
+    case 4: // DEADLINE_EXCEEDED
+      return new InvocationError("车辆响应超时，请靠近车辆后重试");
+    case 7: // PERMISSION_DENIED
+      return new InvocationError("令牌已过期，请重新登录");
+    case 8: // RESOURCE_EXHAUSTED
+      return new InvocationError("请求过于频繁，请稍后重试");
+    case 13: // INTERNAL
+      return new InvocationError("Volvo 服务暂时异常，请稍后重试");
+    case 14: // UNAVAILABLE
+      if (detail === "Channel has been shut down") {
+        return new InvocationError("车辆服务暂不可用，请稍后重试");
+      }
+      return new InvocationError("车辆服务暂不可用，请稍后重试");
+    case 16: // UNAUTHENTICATED
+      return new InvocationError("令牌已过期，请重新登录");
+    default:
+      return new InvocationError(detail || "网络异常，请稍后重试");
+  }
+}
+
 function raiseInvocationFail(status: string): void {
   switch (status) {
     case "CAR_OFFLINE":
-      throw new InvocationError("车辆当前离线，请稍后重试");
+      throw new InvocationError("车辆当前离线，请靠近车辆后重试");
     case "DELIVERY_TIMEOUT":
+      throw new InvocationError("指令发送超时，车辆可能处于信号不佳区域");
     case "RESPONSE_TIMEOUT":
       throw new InvocationError("车辆响应超时，请稍后重试");
     case "UNKNOWN_CAR_ERROR":
@@ -246,7 +275,9 @@ function raiseInvocationFail(status: string): void {
     case "NOT_ALLOWED_WRONG_USAGE_MODE":
       throw new InvocationError("当前车辆状态不支持此操作");
     case "NOT_ALLOWED_CONFLICTING_INVOCATION":
-      throw new InvocationError("车辆正在执行其他操作，请稍后重试");
+      throw new InvocationError("有指令正在执行中，请稍后重试");
+    case "INVOCATION_SPECIFIC_ERROR":
+      throw new InvocationError("指令执行失败，请稍后重试");
     default:
       throw new InvocationError("操作未完成，请稍后重试");
   }
@@ -279,9 +310,7 @@ function firstStreamMessage(
       if (!done) {
         done = true;
         clearTimeout(timer);
-        console.error(
-          `[gRPC] ${label} error: code=${err.code} details=${err.details}`,
-        );
+        log.warn("gRPC", `${label} error: code=${err.code} details=${err.details}`);
         reject(err);
       }
     });
@@ -367,15 +396,6 @@ export class VehicleGrpcAPI {
     this.invocationStub = null;
   }
 
-  private resetLbsClient(): void {
-    try {
-      this.lbsClient?.close();
-    } catch {
-      /* ignore */
-    }
-    this.lbsClient = null;
-  }
-
   private authMeta(vin?: string): grpc.Metadata {
     const meta = new grpc.Metadata();
     const token = this.tokenProvider().trim();
@@ -391,34 +411,20 @@ export class VehicleGrpcAPI {
     request: any,
     vin: string,
   ): Promise<any> {
-    const client = host === "lbs" ? this.getLbsClient() : this.getMainClient();
-    await this.waitForReady(client, label);
-    const call = client.makeServerStreamRequest(
-      method.path,
-      method.requestSerialize,
-      method.responseDeserialize,
-      request,
-      this.authMeta(vin),
-    );
-    return firstStreamMessage(call, label);
-  }
-
-  private callRaw(
-    method: MethodDef,
-    host: "main" | "lbs",
-    label: string,
-    request: any,
-    vin: string,
-  ): Promise<any> {
-    const client = host === "lbs" ? this.getLbsClient() : this.getMainClient();
-    const call = client.makeServerStreamRequest(
-      method.path,
-      method.requestSerialize,
-      (buf: Buffer) => buf,
-      request,
-      this.authMeta(vin),
-    );
-    return firstStreamMessage(call, label);
+    try {
+      const client = host === "lbs" ? this.getLbsClient() : this.getMainClient();
+      await this.waitForReady(client, label);
+      const call = client.makeServerStreamRequest(
+        method.path,
+        method.requestSerialize,
+        method.responseDeserialize,
+        request,
+        this.authMeta(vin),
+      );
+      return firstStreamMessage(call, label);
+    } catch (e: any) {
+      throw mapGrpcError(e);
+    }
   }
 
   private async waitForReady(
@@ -429,7 +435,7 @@ export class VehicleGrpcAPI {
       const deadline = new Date(Date.now() + 10_000);
       client.waitForReady(deadline, (err) => {
         if (err) {
-          console.error(`[waitForReady] ${label} failed:`, err.message);
+          log.warn("waitForReady", `${label} failed: ${err.message}`);
           reject(err);
         } else {
           resolve();
@@ -547,14 +553,6 @@ export class VehicleGrpcAPI {
     );
   }
 
-  async getParkingClimatizationRaw(vin: string): Promise<any> {
-    const r = await this.getParkingClimatization(vin);
-    console.log(
-      `[debug] GetParkingClimatization raw: ${JSON.stringify(r).slice(0, 1000)}`,
-    );
-    return r;
-  }
-
   private async invoke(
     method: MethodDef,
     label: string,
@@ -570,23 +568,17 @@ export class VehicleGrpcAPI {
         });
         const resp = await firstStreamMessage(call, label);
         const status = resp?.data?.status;
-        console.log(`[invoke] ${label} status=${status}`);
+        log.info("invoke", `${label} status=${status}`);
         if (!SUCCESS_STATUSES.has(status)) raiseInvocationFail(status);
         return;
       } catch (e: any) {
-        const code = e?.code;
-        console.error(
-          `[invoke] ${label} attempt=${attempt + 1} code=${code} details=${e?.details ?? e?.message}`,
-        );
-        if (code === 14 && attempt === 0) {
+        log.warn("invoke", `${label} attempt=${attempt + 1} code=${e?.code} details=${e?.details ?? e?.message}`);
+        if (e?.code === 14 && attempt === 0) {
           this.resetInvocationStub();
           await new Promise((r) => setTimeout(r, 800));
           continue;
         }
-        if (code === 14 || e?.message === "Channel has been shut down") {
-          throw new InvocationError("车辆服务暂时不可用，请稍后重试");
-        }
-        throw e;
+        throw e instanceof InvocationError ? e : mapGrpcError(e);
       }
     }
   }

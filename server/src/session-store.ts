@@ -1,4 +1,5 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import { log } from "./volvo/log.js";
 import path from "node:path";
 
 interface PersistedSession {
@@ -18,7 +19,7 @@ function ensureDir(): void {
     try {
       mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
     } catch (err) {
-      console.error(`[session-store] cannot create ${DATA_DIR}:`, (err as Error).message);
+      log.warn("session-store", `cannot create ${DATA_DIR}: ${(err as Error).message}`);
       writable = false;
     }
   }
@@ -38,7 +39,7 @@ function readStore(): PersistedSession[] {
         typeof (s as PersistedSession).password === "string",
     );
   } catch (err) {
-    console.error(`[session-store] read failed:`, (err as Error).message);
+    log.warn("session-store", `read failed: ${(err as Error).message}`);
     return [];
   }
 }
@@ -49,7 +50,7 @@ function writeStore(sessions: PersistedSession[]): void {
     ensureDir();
     writeFileSync(STORE_FILE, JSON.stringify(sessions), { mode: 0o600 });
   } catch (err) {
-    console.error(`[session-store] write failed:`, (err as Error).message);
+    log.warn("session-store", `write failed: ${(err as Error).message}`);
     writable = false;
   }
 }
