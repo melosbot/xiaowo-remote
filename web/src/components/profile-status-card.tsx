@@ -1,5 +1,4 @@
-import { useState } from "react"
-import { CheckCircle2Icon, CircleIcon, LogOutIcon, QrCodeIcon } from "lucide-react"
+import { CheckCircle2Icon, CircleIcon, LogOutIcon } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -11,12 +10,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -77,9 +70,6 @@ export function ProfileStatusCard({
   const growthValueForUpgrade = membership?.growthValueForUpgrade ?? 0
   const signed = signin?.signInState ?? false
   const signInCount = signin?.signInCount ?? 0
-  const uniqueNumberCode = membership?.uniqueNumberCode ?? ""
-  const qrCodeUrl = membership?.qrCodeUrl ?? ""
-  const [qrOpen, setQrOpen] = useState(false)
 
   if (loading && !account) {
     return (
@@ -165,45 +155,7 @@ export function ProfileStatusCard({
           </div>
         </div>
 
-        {(uniqueNumberCode || qrCodeUrl) && (
-          <>
-            <Separator />
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">会员码</span>
-              <button
-                type="button"
-                className="flex items-center gap-1.5 text-sm text-primary hover:underline"
-                onClick={() => setQrOpen(true)}
-              >
-                <QrCodeIcon className="size-4" />
-                {uniqueNumberCode}
-              </button>
-            </div>
-            <Dialog open={qrOpen} onOpenChange={setQrOpen}>
-              <DialogContent className="max-w-xs">
-                <DialogHeader>
-                  <DialogTitle>会员码</DialogTitle>
-                </DialogHeader>
-                <div className="flex flex-col items-center gap-4">
-                  {qrCodeUrl && (
-                    <img
-                      src={qrCodeUrl}
-                      alt="会员二维码"
-                      className="w-full rounded-panel"
-                    />
-                  )}
-                  {uniqueNumberCode && (
-                    <p className="text-center text-sm text-muted-foreground">
-                      {uniqueNumberCode}
-                    </p>
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
-          </>
-        )}
-
-        <Separator />
+<Separator />
 
         <div className="flex items-center justify-between">
           <div className="text-sm">

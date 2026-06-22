@@ -19,8 +19,8 @@ COPY server/tsconfig.json ./
 COPY server/src/ ./src/
 RUN npx tsc \
     && cp -r src/proto dist/proto \
-    && npm prune --omit=dev --no-audit \
-    && npm install --no-save tsx esbuild get-tsconfig \
+    && rm -rf node_modules \
+    && npm ci --omit=dev --no-audit --no-fund \
     && npm cache clean --force
 
 # Strip runtime-useless bloat from production node_modules
@@ -40,8 +40,9 @@ RUN find node_modules -type f \( \
     rm -rf node_modules/@types 2>/dev/null; \
     rm -rf node_modules/yargs 2>/dev/null
 
-FROM node:24-slim AS runtime
-# Debian-based Node 镜像，排除 Alpine musl TLS 指纹差异
+FROM alpine:3.24 AS runtime
+RUN apk add --no-cache nodejs
+RUN addgroup -g 1000 node && adduser -u 1000 -G node -s /bin/sh -D node
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=8787 \
@@ -57,4 +58,4 @@ EXPOSE 8787
 VOLUME ["/app/data"]
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:8787/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
-CMD ["npx", "tsx", "dist/index.js"]
+CMD ["node", "--import", "./node_modules/tsx/dist/loader.mjs", "dist/index.js"]
