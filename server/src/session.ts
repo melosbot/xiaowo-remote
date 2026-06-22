@@ -82,13 +82,12 @@ export async function restoreSessions(): Promise<void> {
       await initSession(s.phone, s.password, s.sessionId);
       console.log(`[session] restored ${s.sessionId.slice(0, 8)}`);
     } catch (err) {
-      // 恢复失败不立即删除持久化会话：可能是 Volvo API 偶发故障，
-      // 下次重启或客户端触发自动重登时还有机会恢复。
-      // 只有在用户主动退出时才应删除持久化记录。
+      // 恢复失败删除磁盘备份，客户端自动重登会创建新会话
       console.error(
-        `[session] restore failed for ${s.sessionId.slice(0, 8)} (kept on disk for retry):`,
+        `[session] restore failed for ${s.sessionId.slice(0, 8)}:`,
         (err as Error).message,
       );
+      removePersistedSession(s.sessionId);
     }
   }
   if (stored.length > 0) {
