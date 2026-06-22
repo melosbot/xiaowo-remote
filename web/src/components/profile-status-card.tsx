@@ -1,14 +1,22 @@
-import { CheckCircle2Icon, CircleIcon, LogOutIcon } from "lucide-react"
+import { useState } from "react"
+import { CheckCircle2Icon, CircleIcon, LogOutIcon, QrCodeIcon } from "lucide-react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Card,
+  CardAction,
   CardContent,
   CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Progress } from "@/components/ui/progress"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -69,6 +77,9 @@ export function ProfileStatusCard({
   const growthValueForUpgrade = membership?.growthValueForUpgrade ?? 0
   const signed = signin?.signInState ?? false
   const signInCount = signin?.signInCount ?? 0
+  const uniqueNumberCode = membership?.uniqueNumberCode ?? ""
+  const qrCodeUrl = membership?.qrCodeUrl ?? ""
+  const [qrOpen, setQrOpen] = useState(false)
 
   if (loading && !account) {
     return (
@@ -84,9 +95,20 @@ export function ProfileStatusCard({
               <Skeleton className="h-3.5 w-32" />
             </div>
           </div>
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-full" />
+          <div className="grid grid-cols-3 gap-x-4 gap-y-2">
+            <div className="flex flex-col gap-1">
+              <Skeleton className="h-3 w-12" />
+              <Skeleton className="h-4 w-16" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Skeleton className="h-3 w-12" />
+              <Skeleton className="h-4 w-16" />
+            </div>
+            <div className="flex flex-col gap-1">
+              <Skeleton className="h-3 w-12" />
+              <Skeleton className="h-4 w-16" />
+            </div>
+          </div>
           <Separator />
           <Skeleton className="h-3.5 w-full" />
           <Skeleton className="h-1 w-full" />
@@ -103,6 +125,9 @@ export function ProfileStatusCard({
     <Card>
       <CardHeader>
         <CardTitle>账户概览</CardTitle>
+        <CardAction>
+          <Badge variant="secondary">{levelTitle}</Badge>
+        </CardAction>
       </CardHeader>
 
       <CardContent className="flex flex-col gap-4">
@@ -113,35 +138,70 @@ export function ProfileStatusCard({
               {fallback}
             </AvatarFallback>
           </Avatar>
-          <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
-            <div className="flex min-w-0 flex-col">
-              <div className="truncate text-base font-semibold">
-                {displayName}
-              </div>
-              <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                {mobile}
-              </p>
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <div className="min-w-0 truncate text-base font-semibold">
+              {displayName}
             </div>
-            <Badge variant="secondary" className="shrink-0">
-              {levelTitle}
-            </Badge>
+            <p className="truncate text-xs text-muted-foreground">
+              {mobile}
+            </p>
           </div>
         </div>
 
         <Separator />
 
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">可用 V 值</span>
-          <span className="text-sm font-medium">{vRestValue}</span>
+        <div className="grid grid-cols-3 gap-x-4 gap-y-2">
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">可用 V 值</span>
+            <span className="text-sm">{vRestValue}</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">本月获得</span>
+            <span className="text-sm">{monthValue}</span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">V 值到期</span>
+            <span className="text-sm">{expireTime}</span>
+          </div>
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">本月获得</span>
-          <span className="text-sm font-medium">{monthValue}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">V 值到期</span>
-          <span className="text-sm font-medium">{expireTime}</span>
-        </div>
+
+        {(uniqueNumberCode || qrCodeUrl) && (
+          <>
+            <Separator />
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">会员码</span>
+              <button
+                type="button"
+                className="flex items-center gap-1.5 text-sm text-primary hover:underline"
+                onClick={() => setQrOpen(true)}
+              >
+                <QrCodeIcon className="size-4" />
+                {uniqueNumberCode}
+              </button>
+            </div>
+            <Dialog open={qrOpen} onOpenChange={setQrOpen}>
+              <DialogContent className="max-w-xs">
+                <DialogHeader>
+                  <DialogTitle>会员码</DialogTitle>
+                </DialogHeader>
+                <div className="flex flex-col items-center gap-4">
+                  {qrCodeUrl && (
+                    <img
+                      src={qrCodeUrl}
+                      alt="会员二维码"
+                      className="w-full rounded-panel"
+                    />
+                  )}
+                  {uniqueNumberCode && (
+                    <p className="text-center text-sm text-muted-foreground">
+                      {uniqueNumberCode}
+                    </p>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
+          </>
+        )}
 
         <Separator />
 

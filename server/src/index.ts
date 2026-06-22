@@ -1,5 +1,7 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -37,16 +39,48 @@ process.on("uncaughtException", (err) => {
 });
 
 const app = express();
-app.use(cors());
-app.use(express.json());
 
-// 请求日志：记录所有 /api/ 请求，便于调试
+// ---- 安全策略 ----
+app.use(helmet({
+  contentSecurityPolicy: false, // PWA 由 Vite 注入 CSP meta，服务端不覆盖
+  crossOriginEmbedderPolicy: false,
+}));
+app.use(cors({
+  origin: process.env.CORS_ORIGIN ?? true, // 默认允许所有同源，设 CORS_ORIGIN 限制
+  methods: ["GET", "POST"],
+  maxAge: 86400,
+}));
+app.use(express.json({ limit: "64kb" }));
+
+// 全局限速
+app.use(rateLimit({
+  windowMs: 60_000,
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "请求过于频繁，请稍后重试" },
+}));
+
+// 登录限速（防暴力破解）
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "登录尝试过多，请 15 分钟后再试" },
+});
+
+// 请求日志：记录所有 /api/ 请求，脱敏敏感字段
 app.use((req, _res, next) => {
   if (req.path.startsWith("/api/")) {
-    const body = req.method === "POST" || req.method === "PUT"
-      ? JSON.stringify(req.body).slice(0, 500)
-      : "";
-    console.log(`[req] ${req.method} ${req.path} ${body}`);
+    if (req.method === "POST" || req.method === "PUT") {
+      const safe = { ...(req.body ?? {}) };
+      if ("password" in safe) safe.password = "***";
+      if ("token" in safe) safe.token = "***";
+      console.log(`[req] ${req.method} ${req.path} ${JSON.stringify(safe).slice(0, 500)}`);
+    } else {
+      console.log(`[req] ${req.method} ${req.path}`);
+    }
   }
   next();
 });
@@ -172,7 +206,7 @@ app.post("/api/membership/signin", async (req, res) => {
   });
 });
 
-app.post("/api/login", async (req, res) => {
+app.post("/api/login", loginLimiter, async (req, res) => {
   try {
     const { phone, password } = req.body ?? {};
     if (!phone || !password) {

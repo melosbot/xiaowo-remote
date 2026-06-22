@@ -196,6 +196,7 @@ export interface MembershipInfo {
   growthValueForUpgrade: number
   nextLevelBeginGrowthValue: number
   uniqueNumberCode: string
+  qrCodeUrl: string
 }
 
 export interface SignInStatus {

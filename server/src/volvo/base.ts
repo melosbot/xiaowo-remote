@@ -54,6 +54,7 @@ export interface MembershipInfo {
   growthValueForUpgrade: number;
   nextLevelBeginGrowthValue: number;
   uniqueNumberCode: string;
+  qrCodeUrl: string;
 }
 
 export interface SignInStatus {
@@ -210,6 +211,7 @@ export class VehicleBaseAPI {
       growthValueForUpgrade: Number(d.growthValueForUpgrade ?? 0),
       nextLevelBeginGrowthValue: Number(d.nextLevelBeginGrowthValue ?? 0),
       uniqueNumberCode: String(d.uniqueNumberCode ?? ""),
+      qrCodeUrl: String(d.qrCodeUrl ?? ""),
     };
   }
 

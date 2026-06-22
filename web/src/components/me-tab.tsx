@@ -289,7 +289,7 @@ export function MeTab() {
               </SelectContent>
             </Select>
             {data?.vehicleInfo && (
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">车型</span>
                   <span className="text-sm">
@@ -336,23 +336,19 @@ export function MeTab() {
                       : data.vehicleInfo.carType || "—"}
                   </span>
                 </div>
-                {data.vehicleInfo.outerColor && (
+                {(data.vehicleInfo.outerColor ||
+                  data.vehicleInfo.innerColor) && (
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-muted-foreground">
-                      外观颜色
+                      外观内饰
                     </span>
                     <span className="text-sm">
-                      {data.vehicleInfo.outerColor}
-                    </span>
-                  </div>
-                )}
-                {data.vehicleInfo.innerColor && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">
-                      内饰颜色
-                    </span>
-                    <span className="text-sm">
-                      {data.vehicleInfo.innerColor}
+                      {[
+                        data.vehicleInfo.outerColor,
+                        data.vehicleInfo.innerColor,
+                      ]
+                        .filter(Boolean)
+                        .join(" / ") || "—"}
                     </span>
                   </div>
                 )}
@@ -429,36 +425,39 @@ export function MeTab() {
         <CardHeader>
           <CardTitle>关于应用</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4 text-sm text-muted-foreground">
-          <div className="flex items-center justify-between">
-            <span>产品名称</span>
-            <Badge variant="secondary">小沃远控</Badge>
-          </div>
-          <div className="flex items-center justify-between">
-            <span>车辆服务</span>
-            <span>沃尔沃中国 API</span>
+        <CardContent className="flex flex-col gap-2 text-sm">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <span>小沃远控</span>
+              <span>·</span>
+              <span>沃尔沃中国 API</span>
+            </div>
+            <p className="text-xs text-muted-foreground/70">
+              面向沃尔沃中国区 SPA1 燃油车的非官方 PWA 控制面板。
+              仅供学习与技术研究，与沃尔沃汽车无任何关联。
+            </p>
           </div>
           <Separator />
           <div className="flex items-center justify-between">
-            <span>最后拉取</span>
-            <Badge variant="secondary">{fmtLastFetch(lastFetch)}</Badge>
+            <span className="text-muted-foreground">最后拉取</span>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">{fmtLastFetch(lastFetch)}</Badge>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                disabled={refreshing}
+                onClick={handleRefreshAll}
+              >
+                {refreshing ? (
+                  <Spinner className="size-3.5" />
+                ) : (
+                  <RefreshCwIcon className="size-3.5" />
+                )}
+              </Button>
+            </div>
           </div>
         </CardContent>
-        <CardFooter>
-          <Button
-            variant="outline"
-            className="w-full"
-            disabled={refreshing}
-            onClick={handleRefreshAll}
-          >
-            {refreshing ? (
-              <Spinner data-icon="inline-start" />
-            ) : (
-              <RefreshCwIcon data-icon="inline-start" />
-            )}
-            更新 PWA 数据
-          </Button>
-        </CardFooter>
       </Card>
     </div>
   )
