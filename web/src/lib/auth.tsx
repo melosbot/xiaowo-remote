@@ -21,7 +21,6 @@ import {
   type BoundVehicle,
   type PersistedAuth,
   type VolvoApi,
-  type VehicleStatus,
 } from "@/lib/api"
 
 type Connection = "online" | "offline" | "connecting"

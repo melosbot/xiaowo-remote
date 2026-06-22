@@ -332,8 +332,21 @@ export class VehicleGrpcAPI {
 
   constructor(private tokenProvider: () => string) {}
 
-  private sslCreds(): grpc.ChannelCredentials {
-    if (!this.creds) this.creds = grpc.credentials.createSsl();
+  private getCredentials(): grpc.ChannelCredentials {
+    if (!this.creds) {
+      const callCreds = grpc.credentials.createFromMetadataGenerator(
+        (_params, callback) => {
+          const token = this.tokenProvider().trim();
+          const meta = new grpc.Metadata();
+          meta.add("authorization", `Bearer ${token}`);
+          callback(null, meta);
+        },
+      );
+      this.creds = grpc.credentials.combineChannelCredentials(
+        grpc.credentials.createSsl(),
+        callCreds,
+      );
+    }
     return this.creds;
   }
 
@@ -341,15 +354,10 @@ export class VehicleGrpcAPI {
     if (!this.mainClient) {
       this.mainClient = new grpc.Client(
         GRPC_MAIN_HOST,
-        this.sslCreds(),
+        this.getCredentials(),
         {
           "grpc.primary_user_agent": GRPC_USER_AGENT,
           "grpc.accept_encoding": "gzip",
-          "grpc.keepalive_time_ms": 60_000,
-          "grpc.keepalive_timeout_ms": 20_000,
-          "grpc.keepalive_permit_without_calls": 1,
-          "grpc.min_reconnect_backoff_ms": 1_000,
-          "grpc.max_reconnect_backoff_ms": 10_000,
         },
       );
     }
@@ -358,11 +366,8 @@ export class VehicleGrpcAPI {
 
   private getLbsClient(): grpc.Client {
     if (!this.lbsClient) {
-      this.lbsClient = new grpc.Client(GRPC_LBS_HOST, this.sslCreds(), {
+      this.lbsClient = new grpc.Client(GRPC_LBS_HOST, this.getCredentials(), {
         "grpc.primary_user_agent": GRPC_USER_AGENT,
-        "grpc.keepalive_time_ms": 60_000,
-        "grpc.keepalive_timeout_ms": 20_000,
-        "grpc.keepalive_permit_without_calls": 1,
       });
     }
     return this.lbsClient;
@@ -372,15 +377,10 @@ export class VehicleGrpcAPI {
     if (!this.invocationStub) {
       this.invocationStub = new InvocationService(
         GRPC_MAIN_HOST,
-        this.sslCreds(),
+        this.getCredentials(),
         {
           "grpc.primary_user_agent": GRPC_USER_AGENT,
           "grpc.accept_encoding": "gzip",
-          "grpc.keepalive_time_ms": 60_000,
-          "grpc.keepalive_timeout_ms": 20_000,
-          "grpc.keepalive_permit_without_calls": 1,
-          "grpc.min_reconnect_backoff_ms": 1_000,
-          "grpc.max_reconnect_backoff_ms": 10_000,
         },
       );
     }
@@ -398,8 +398,7 @@ export class VehicleGrpcAPI {
 
   private authMeta(vin?: string): grpc.Metadata {
     const meta = new grpc.Metadata();
-    const token = this.tokenProvider().trim();
-    meta.add("authorization", `Bearer ${token}`);
+    // authorization 由 call credentials (combineChannelCredentials) 注入
     if (vin) meta.add("vin", vin);
     return meta;
   }
