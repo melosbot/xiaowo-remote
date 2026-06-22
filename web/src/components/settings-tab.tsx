@@ -1,27 +1,17 @@
 import { useState, useEffect, type FormEvent } from "react"
 import {
-  LogOutIcon,
   LogInIcon,
   RotateCcwIcon,
   SaveIcon,
   FlaskConicalIcon,
   SendIcon,
-  GiftIcon,
-  CalendarCheckIcon,
-  TrendingUpIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth"
+import { useAccount } from "@/hooks/use-account"
 import { useVehicleStatus } from "@/hooks/use-vehicle-status"
-import {
-  loadCredentials,
-  loadCachedProfile,
-  loadCachedMembership,
-  shouldThrottleFetch,
-  markFetchDone,
-  type UserProfile,
-  type MembershipInfo,
-} from "@/lib/api"
+import { loadCredentials } from "@/lib/api"
+import { ProfileStatusCard } from "@/components/profile-status-card"
 import {
   clearAmapConfig,
   loadAmapConfig,
@@ -30,7 +20,6 @@ import {
 import { loadTgConfig, saveTgConfig } from "@/lib/tg"
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
   CardFooter,
@@ -58,6 +47,14 @@ export function SettingsTab() {
   const { api, sessionId, vehicles, selectedVin, phone, selectVin, login, logout } =
     useAuth()
   const { data } = useVehicleStatus()
+  const {
+    account,
+    membership,
+    signin,
+    loading: accountLoading,
+    signingIn,
+    signIn,
+  } = useAccount()
   const [phoneInput, setPhoneInput] = useState(
     () => loadCredentials()?.phone ?? phone ?? ""
   )
@@ -66,13 +63,7 @@ export function SettingsTab() {
   )
   const [remember, setRemember] = useState(() => !!loadCredentials())
   const [submitting, setSubmitting] = useState(false)
-  const [account, setAccount] = useState<UserProfile | null>(() => loadCachedProfile())
-  const [membership, setMembership] = useState<MembershipInfo | null>(() => loadCachedMembership())
-  const [signIn, setSignIn] = useState<{
-    signInState: boolean
-    signInCount: number
-  } | null>(null)
-  const [signingIn, setSigningIn] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
   const [amapKeyInput, setAmapKeyInput] = useState("")
   const [amapSecurityInput, setAmapSecurityInput] = useState("")
   const [amapTesting, setAmapTesting] = useState(false)
@@ -89,49 +80,6 @@ export function SettingsTab() {
     tokenHint: string
     source: "ui" | "env" | null
   } | null>(null)
-  // 手动刷新账户 + 会员数据（不受节流限制）
-  const refreshAccount = async () => {
-    if (!sessionId) return
-    const [acc, mem, sig] = await Promise.allSettled([
-      api.getAccount(sessionId),
-      api.getMembership(sessionId),
-      api.getSignInStatus(sessionId),
-    ])
-    if (acc.status === "fulfilled" && acc.value) setAccount(acc.value)
-    if (mem.status === "fulfilled") setMembership(mem.value)
-    if (sig.status === "fulfilled") setSignIn(sig.value)
-    markFetchDone()
-  }
-
-  // 加载时刷一次（冷却期内跳过）+ 监听顶部刷新按钮
-  useEffect(() => {
-    if (!sessionId) return
-    if (!shouldThrottleFetch()) {
-      void refreshAccount()
-    }
-    const handler = () => { void refreshAccount() }
-    window.addEventListener("volvo-refresh", handler)
-    return () => window.removeEventListener("volvo-refresh", handler)
-  }, [sessionId, api])
-
-  const handleSignIn = async () => {
-    if (!sessionId || signingIn) return
-    setSigningIn(true)
-    try {
-      const result = await api.doSignIn(sessionId)
-      setSignIn(result)
-      if (result.signInState) {
-        toast.success("签到成功！")
-        // 签到后更新会员数据
-        api.getMembership(sessionId).then(setMembership).catch(() => {})
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "签到失败")
-    } finally {
-      setSigningIn(false)
-    }
-  }
-
   // 从服务端拉取设置（跟随账号）
   useEffect(() => {
     api.getTgStatus().then(setTgStatus).catch(() => {})
@@ -258,8 +206,24 @@ export function SettingsTab() {
   }
 
   const handleLogout = async () => {
-    await logout()
-    toast.success("已安全退出")
+    setLoggingOut(true)
+    try {
+      await logout()
+      toast.success("已安全退出")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "退出失败")
+    } finally {
+      setLoggingOut(false)
+    }
+  }
+
+  const handleSignIn = async () => {
+    try {
+      const result = await signIn()
+      toast.success(result.signInState ? "签到成功" : "操作已完成")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "签到失败，请稍后重试")
+    }
   }
 
   const handleAmapSave = async (e: FormEvent) => {
@@ -300,99 +264,17 @@ export function SettingsTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      {sessionId && account ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>账号信息</CardTitle>
-            <CardDescription>
-              {account.mobile}
-              {membership && ` · ${membership.levelTitle} No.${membership.uniqueNumberCode}`}
-            </CardDescription>
-            <CardAction>
-              <div className="flex items-center gap-2">
-                {membership && (
-                  <Button
-                    variant={signIn?.signInState ? "secondary" : "default"}
-                    size="sm"
-                    disabled={signIn?.signInState || signingIn}
-                    onClick={handleSignIn}
-                  >
-                    {signingIn ? (
-                      <Spinner data-icon="inline-start" />
-                    ) : (
-                      <CalendarCheckIcon data-icon="inline-start" />
-                    )}
-                    {signIn?.signInState ? "已签" : "签到"}
-                  </Button>
-                )}
-                <Button variant="outline" size="sm" onClick={handleLogout}>
-                  <LogOutIcon data-icon="inline-start" />
-                </Button>
-              </div>
-            </CardAction>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <div className="flex items-center gap-4">
-              {account.headPortrait ? (
-                <img
-                  src={account.headPortrait}
-                  alt=""
-                  className="size-14 rounded-full object-cover"
-                />
-              ) : (
-                <div className="flex size-14 items-center justify-center rounded-full bg-muted text-xl text-muted-foreground">
-                  {(account.nickName || account.lastName + account.firstName || "?").charAt(0)}
-                </div>
-              )}
-              <div className="flex flex-col gap-0.5">
-                <span className="text-base font-semibold">
-                  {account.lastName}{account.firstName}
-                </span>
-                {account.nickName && (
-                  <span className="text-sm text-muted-foreground">{account.nickName}</span>
-                )}
-              </div>
-            </div>
-            {membership && (
-              <>
-                <Separator />
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="flex flex-col items-center gap-0.5 rounded-lg bg-muted/50 py-2">
-                    <GiftIcon className="size-4 text-primary" />
-                    <span className="text-lg font-bold">{membership.vRestValue}</span>
-                    <span className="text-[10px] text-muted-foreground">可用 V 值</span>
-                  </div>
-                  <div className="flex flex-col items-center gap-0.5 rounded-lg bg-muted/50 py-2">
-                    <TrendingUpIcon className="size-4 text-primary" />
-                    <span className="text-lg font-bold">{membership.growthValue}</span>
-                    <span className="text-[10px] text-muted-foreground">成长值</span>
-                  </div>
-                  <div className="flex flex-col items-center gap-0.5 rounded-lg bg-muted/50 py-2">
-                    <CalendarCheckIcon className="size-4 text-primary" />
-                    <span className="text-lg font-bold">{signIn?.signInCount ?? 0}</span>
-                    <span className="text-[10px] text-muted-foreground">本月签到</span>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>距下一级还差 {membership.growthValueForUpgrade} 成长值</span>
-                    <span>{Math.round(membership.levelProgress * 100)}%</span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary transition-all"
-                      style={{ width: `${Math.min(100, membership.levelProgress * 100)}%` }}
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>本月 +{membership.monthValue} V值</span>
-                  {membership.expireTime && <span>到期 {membership.expireTime}</span>}
-                </div>
-              </>
-            )}
-          </CardContent>
-        </Card>
+      {sessionId ? (
+        <ProfileStatusCard
+          account={account}
+          membership={membership}
+          signin={signin}
+          loading={accountLoading}
+          signingIn={signingIn}
+          loggingOut={loggingOut}
+          onSignIn={handleSignIn}
+          onLogout={handleLogout}
+        />
       ) : (
         <Card>
           <CardHeader>

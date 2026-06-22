@@ -50,7 +50,9 @@ export interface MembershipInfo {
   levelNumber: number;
   levelProgress: number;
   growthValue: number;
+  validGrowthValue: number;
   growthValueForUpgrade: number;
+  nextLevelBeginGrowthValue: number;
   uniqueNumberCode: string;
 }
 
@@ -200,7 +202,9 @@ export class VehicleBaseAPI {
       levelNumber: Number(d.levelNumber ?? 0),
       levelProgress: Number(d.levelProgress ?? 0),
       growthValue: Number(d.growthValue ?? 0),
+      validGrowthValue: Number(d.validGrowthValue ?? 0),
       growthValueForUpgrade: Number(d.growthValueForUpgrade ?? 0),
+      nextLevelBeginGrowthValue: Number(d.nextLevelBeginGrowthValue ?? 0),
       uniqueNumberCode: String(d.uniqueNumberCode ?? ""),
     };
   }

@@ -192,7 +192,9 @@ export interface MembershipInfo {
   levelNumber: number
   levelProgress: number
   growthValue: number
+  validGrowthValue: number
   growthValueForUpgrade: number
+  nextLevelBeginGrowthValue: number
   uniqueNumberCode: string
 }
 
@@ -261,6 +263,19 @@ export function loadCachedMembership(): MembershipInfo | null {
 
 function saveCachedMembership(m: MembershipInfo) {
   localStorage.setItem(MEMBERSHIP_CACHE_KEY, JSON.stringify(m))
+}
+
+const SIGNIN_CACHE_KEY = "volvo-pwa-signin"
+
+export function loadCachedSignIn(): SignInStatus | null {
+  try {
+    const raw = localStorage.getItem(SIGNIN_CACHE_KEY)
+    return raw ? (JSON.parse(raw) as SignInStatus) : null
+  } catch { return null }
+}
+
+function saveCachedSignIn(s: SignInStatus) {
+  localStorage.setItem(SIGNIN_CACHE_KEY, JSON.stringify(s))
 }
 
 export function loadCredentials(): PersistedCredentials | null {
@@ -451,9 +466,11 @@ export function createApi(baseUrl: string) {
     async getSignInStatus(
       sessionId: string,
     ): Promise<SignInStatus> {
-      return request(
+      const data = await request<SignInStatus>(
         `${base}/api/membership/signin?session=${encodeURIComponent(sessionId)}`
       )
+      if (data) saveCachedSignIn(data)
+      return data
     },
     async doSignIn(sessionId: string): Promise<SignInStatus> {
       return request(`${base}/api/membership/signin`, {

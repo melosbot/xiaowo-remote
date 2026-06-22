@@ -8,6 +8,7 @@ import { StatusTab } from "@/components/status-tab"
 import { SettingsTab } from "@/components/settings-tab"
 import { LoginGate } from "@/components/login-gate"
 import { VehicleStatusProvider } from "@/hooks/use-vehicle-status"
+import { AccountProvider } from "@/hooks/use-account"
 
 export function App() {
   const { status } = useAuth()
@@ -26,19 +27,21 @@ export function App() {
   if (status === "guest") return <LoginGate />
 
   return (
-    <VehicleStatusProvider>
-      <div className="min-h-svh bg-background text-foreground">
-        <Header />
-        <main className="mx-auto w-full max-w-app px-4 py-4 pb-24">
-          <div className="page-enter">
-            {tab === "control" && <ControlTab />}
-            {tab === "status" && <StatusTab />}
-            {tab === "settings" && <SettingsTab />}
-          </div>
-        </main>
-        <BottomNav active={tab} onChange={navigate} />
-      </div>
-    </VehicleStatusProvider>
+    <AccountProvider>
+      <VehicleStatusProvider>
+        <div className="min-h-svh bg-background text-foreground">
+          <Header />
+          <main className="mx-auto w-full max-w-app px-4 py-4 pb-24">
+            <div className="page-enter">
+              {tab === "control" && <ControlTab />}
+              {tab === "status" && <StatusTab />}
+              {tab === "settings" && <SettingsTab />}
+            </div>
+          </main>
+          <BottomNav active={tab} onChange={navigate} />
+        </div>
+      </VehicleStatusProvider>
+    </AccountProvider>
   )
 }
 
