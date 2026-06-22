@@ -6,6 +6,11 @@ import {
   requireCapability,
   type VehicleCapabilities,
 } from "./capabilities.js";
+import {
+  normalizeRemoteEngineStatus,
+  protoTimestampToIso,
+  type RemoteEngineStatus,
+} from "./engine-status.js";
 
 const SERVICE_WARNING_MSG: Record<string, string> = {
   SERVICE_WARNING_UNSPECIFIED: "状态未知",
@@ -132,10 +137,17 @@ export interface VehicleStatus {
     sunroof: boolean;
   };
   engine: {
+    /** 发动机是否在运转（行驶中或远程启动运行中） */
     running: boolean;
+    /** 车辆正在被驾驶（Availability=CarInUse），此时远程控制不可用 */
+    carInUse: boolean;
+    /** 远程启动是否在运行（EngineRunningStatus=Running） */
     remoteRunning: boolean;
+    remoteStatus: RemoteEngineStatus;
+    remoteUpdateTime: string | null;
     remoteStartTime: string | null;
     remoteEndTime: string | null;
+    /** 远程启动错误类型，空字符串表示无错误 */
     errorType: string;
     errorMsg: string | null;
   };
@@ -332,7 +344,7 @@ export class VehicleController {
       this.grpc.getOdometer(vin),
       this.grpc.getAvailability(vin),
       this.grpc.getLocation(vin),
-      this.isAaos ? this.grpc.getEngineStatus(vin) : Promise.resolve(null),
+      this.grpc.getEngineStatus(vin),
       this.grpc.getPreferences(vin),
       this.grpc.getParkingClimatization(vin),
       this.grpc.getPreCleaning(vin),
@@ -377,8 +389,16 @@ export class VehicleController {
       ? { latitude: loc.latitude, longitude: loc.longitude }
       : { latitude: 0, longitude: 0 };
 
-    const engRunningStatus: string = eng?.engineRunningStatus ?? "Off";
-    const engErrorType: string = eng?.engineError ?? "Unspecifid1";
+    const engRunningStatus = normalizeRemoteEngineStatus(
+      eng?.engineRunningStatus,
+    );
+    // Unspecifid1=0 表示无错误，不应展示为错误类型
+    const rawErrorType: string = eng?.engineError ?? "Unspecifid1";
+    const engErrorType =
+      rawErrorType === "Unspecifid1" ? "" : rawErrorType;
+    const carInUse =
+      avail?.availableStatus === "Unavailable" &&
+      avail?.unavailableReason === "CarInUse";
 
     return {
       vin,
@@ -406,23 +426,33 @@ export class VehicleController {
       },
       engine: {
         running:
-          avail?.availableStatus === "Unavailable" &&
-          avail?.unavailableReason === "CarInUse",
-        remoteRunning:
-          engRunningStatus === "Running" || engRunningStatus === "STARTED",
-        remoteStartTime: eng?.engineStartTime
-          ? String(eng.engineStartTime)
-          : null,
-        remoteEndTime: eng?.engineEndTime ? String(eng.engineEndTime) : null,
+          carInUse ||
+          engRunningStatus === "Running",
+        carInUse,
+        remoteRunning: engRunningStatus === "Running",
+        remoteStatus: engRunningStatus,
+        remoteUpdateTime: protoTimestampToIso(eng?.updateTime),
+        remoteStartTime: protoTimestampToIso(eng?.engineStartTime),
+        remoteEndTime: protoTimestampToIso(eng?.engineEndTime),
         errorType: engErrorType,
-        errorMsg: ERS_ERROR_MSG[engErrorType] ?? null,
+        errorMsg: engErrorType ? ERS_ERROR_MSG[engErrorType] ?? null : null,
       },
-      fuel: {
-        amount: ful ? Math.round(ful.fuelAmount * 100) / 100 : 0,
-        distanceToEmptyKm: ful?.distanceToEmptyKm ?? 0,
-        avgConsumptionL100Km: ful?.TMFuelAvgConsum ?? 0,
-        tankCapacity: 71,
-      },
+      fuel: (() => {
+        const fm = ful ? Math.round(ful.fuelAmount * 100) / 100 : 0;
+        const dte = ful?.distanceToEmptyKm ?? 0;
+        const avg = ful?.TMFuelAvgConsum ?? 0;
+        // REST 车辆列表 38 个字段实测不含油箱容量。
+        // 从当前油量 + 续航推算（满油时 fuelAmount 最接近真实容量）。
+        const estimated = fm > 0 && dte > 0 && avg > 0
+          ? fm + (dte / 100) * avg
+          : 71;
+        return {
+          amount: fm,
+          distanceToEmptyKm: dte,
+          avgConsumptionL100Km: avg,
+          tankCapacity: Math.max(fm, Math.round(estimated)) || 71,
+        };
+      })(),
       odometerKm: odo ? Number(odo.odometerMeters) / 1000 : 0,
       drivingStats: {
         tm: {

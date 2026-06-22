@@ -20,7 +20,7 @@ interface VehicleStatusContextValue {
   data: VehicleStatus | null
   loading: boolean
   error: string | null
-  refresh: () => Promise<boolean>
+  refresh: () => Promise<VehicleStatus | null>
 }
 
 interface VehicleStatusSnapshot {
@@ -57,7 +57,7 @@ function VehicleStatusProviderForVin({ children }: { children: ReactNode }) {
   const active = status === "authed" && !!sessionId && !!selectedVin
   const requestKey = active ? `${sessionId}:${selectedVin}` : ""
   const currentRequestKeyRef = useRef(requestKey)
-  const inFlightRef = useRef<Map<string, Promise<boolean>>>(new Map())
+  const inFlightRef = useRef<Map<string, Promise<VehicleStatus | null>>>(new Map())
   const [snapshot, setSnapshot] = useState<VehicleStatusSnapshot>(() =>
     cachedSnapshot(selectedVin)
   )
@@ -67,7 +67,7 @@ function VehicleStatusProviderForVin({ children }: { children: ReactNode }) {
   }, [requestKey])
 
   const fetchStatus = useCallback(async () => {
-    if (!sessionId || !selectedVin || !requestKey) return false
+    if (!sessionId || !selectedVin || !requestKey) return null
 
     const existingRequest = inFlightRef.current.get(requestKey)
     if (existingRequest) return existingRequest
@@ -84,7 +84,7 @@ function VehicleStatusProviderForVin({ children }: { children: ReactNode }) {
       }))
       try {
         const nextStatus = await api.getStatus(sessionId, selectedVin)
-        if (currentRequestKeyRef.current !== requestKey) return false
+        if (currentRequestKeyRef.current !== requestKey) return null
         saveVehicleStatus(nextStatus)
         setSnapshot({
           vin: selectedVin,
@@ -93,9 +93,9 @@ function VehicleStatusProviderForVin({ children }: { children: ReactNode }) {
           error: null,
         })
         setConnection("online")
-        return true
+        return nextStatus
       } catch (err) {
-        if (currentRequestKeyRef.current !== requestKey) return false
+        if (currentRequestKeyRef.current !== requestKey) return null
         const message = err instanceof Error ? err.message : String(err)
         setSnapshot((previous) => ({
           vin: selectedVin,
@@ -107,7 +107,7 @@ function VehicleStatusProviderForVin({ children }: { children: ReactNode }) {
           error: message,
         }))
         setConnection("offline")
-        return false
+        return null
       }
     })()
 

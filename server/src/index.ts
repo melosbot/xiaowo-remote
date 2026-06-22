@@ -25,6 +25,7 @@ import {
   DEMO_PASSWORD,
   DEMO_VEHICLES,
   DEMO_CAPS,
+  demoEngineControl,
   demoStatus,
 } from "./volvo/demo.js";
 import {
@@ -196,11 +197,13 @@ async function controlAction(
   req: express.Request,
   res: express.Response,
   handler: ActionHandler,
+  demoHandler?: () => void,
 ) {
   const sessionId = (req.body as AuthBody)?.session ?? "";
   if (isDemo(sessionId)) {
     // 模拟延迟
     await new Promise(r => setTimeout(r, 400));
+    demoHandler?.();
     res.json({ ok: true });
     return;
   }
@@ -219,12 +222,24 @@ app.post("/api/vehicles/:vin/unlock", (req, res) =>
   controlAction(req, res, (c) => c.unlock(req.body?.unlockType)),
 );
 app.post("/api/vehicles/:vin/engine/start", (req, res) =>
-  controlAction(req, res, (c) =>
-    c.engineStart(Number(req.body?.duration ?? 15)),
+  controlAction(
+    req,
+    res,
+    (c) => c.engineStart(Number(req.body?.duration ?? 15)),
+    () => demoEngineControl(
+      req.params.vin,
+      true,
+      Number(req.body?.duration ?? 15),
+    ),
   ),
 );
 app.post("/api/vehicles/:vin/engine/stop", (req, res) =>
-  controlAction(req, res, (c) => c.engineStop()),
+  controlAction(
+    req,
+    res,
+    (c) => c.engineStop(),
+    () => demoEngineControl(req.params.vin, false, 0),
+  ),
 );
 app.post("/api/vehicles/:vin/honk", (req, res) =>
   controlAction(req, res, (c) => c.honk()),

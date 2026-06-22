@@ -1,5 +1,7 @@
-# Dependencies and build output
+# Dependencies
 **/node_modules/
+
+# Build output
 **/dist/
 **/dev-dist/
 **/coverage/
@@ -19,26 +21,22 @@ pnpm-debug.log*
 *.tsbuildinfo
 .cache/
 
-# Editor and operating system files
+# Editor and OS files
 .DS_Store
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# Local agent metadata
+# AI coding assistant metadata
+CLAUDE.md
 .agents/
 .codex/
-
-# Large reverse-engineering inputs; extracted protocol definitions remain tracked
-apk/*.apk
-apk/*.jpg
-apk/*.jpeg
-apk/*.png
-apk/
 plans/
-docs/protocol/
-data/
 
-# Demo runtime directory (session data + persisted state)
-demo/
+# Runtime data
+demo/data/
+server/data/
+
+# Reverse engineering tools and binaries
+tools/

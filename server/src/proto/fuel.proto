@@ -12,7 +12,7 @@ message GetFuelReq {
 }
 
 message Timestamp {
-  int32 seconds = 1;
+  int64 seconds = 1;
   int32 nanos = 2;
 }
 

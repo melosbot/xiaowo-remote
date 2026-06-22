@@ -35,10 +35,17 @@ export interface VehicleStatus {
     sunroof: boolean
   }
   engine: {
+    /** 发动机是否在运转（行驶中或远程启动运行中） */
     running: boolean
+    /** 车辆正在被驾驶（Availability=CarInUse），此时远程控制不可用 */
+    carInUse: boolean
+    /** 远程启动是否在运行（EngineRunningStatus=Running） */
     remoteRunning: boolean
+    remoteStatus: "Unknown" | "Off" | "Starting" | "Running" | "Stopping"
+    remoteUpdateTime: string | null
     remoteStartTime: string | null
     remoteEndTime: string | null
+    /** 远程启动错误类型，空字符串表示无错误 */
     errorType: string
     errorMsg: string | null
   }

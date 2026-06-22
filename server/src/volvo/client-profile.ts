@@ -57,9 +57,9 @@ export const GRPC_TIMEOUT_MS = 30_000;
  */
 export const CAPABILITY_PATH = "/voc/configurations/features";
 
-/** 请求媒体类型（featurequery.v4） */
+/** 请求媒体类型（APK 5.67.0 libapp.so 确认） */
 export const CAPABILITY_CONTENT_TYPE =
-  "application/vnd.volvocar.featurequery.v4+json";
+  "application/vnd.volvocars.api.voc.featurequery.v4+json";
 
-/** 响应媒体类型（featurelist.v4） */
-export const CAPABILITY_ACCEPT = "application/vnd.volvocar.featurelist.v4+json";
+/** 响应媒体类型（APK 5.67.0 libapp.so 确认） */
+export const CAPABILITY_ACCEPT = "application/vnd.volvocars.api.voc.featurelist.v4+json";

@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import {
   LockIcon,
   UnlockIcon,
@@ -48,6 +48,18 @@ import {
 
 type ActionState = Record<string, boolean>
 
+const ENGINE_CONFIRM_TIMEOUT_MS = 30_000
+const ENGINE_CONFIRM_INTERVAL_MS = 2_000
+
+function sleep(milliseconds: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds))
+}
+
+function formatRemaining(seconds: number) {
+  const minutes = Math.floor(seconds / 60)
+  return `${minutes}:${String(seconds % 60).padStart(2, "0")}`
+}
+
 /** 判断某个 capability 字段是否被明确标记为不支持 */
 function cap(key: string, caps: Record<string, string> | null | undefined): "yes" | "no" | "maybe" {
   if (!caps) return "yes" // 能力数据尚未加载，不阻塞操作
@@ -63,6 +75,7 @@ export function ControlTab() {
   const caps = data?.capabilities ?? null
   const [busy, setBusy] = useState<ActionState>({})
   const [duration, setDuration] = useState(15)
+  const [now, setNow] = useState(0)
   const [pending, setPending] = useState<{
     key: string
     label: string
@@ -70,13 +83,49 @@ export function ControlTab() {
     okMsg: string
   } | null>(null)
 
+  const confirmEngineState = async (
+    key: "engineStart" | "engineStop",
+    commandStartedAt: number,
+  ) => {
+    const deadline = commandStartedAt + ENGINE_CONFIRM_TIMEOUT_MS
+    let firstAttempt = true
+    while (firstAttempt || Date.now() < deadline) {
+      if (!firstAttempt) await sleep(ENGINE_CONFIRM_INTERVAL_MS)
+      firstAttempt = false
+      const status = await refresh()
+      if (!status) continue
+
+      const engine = status.engine
+      if (key === "engineStart" && engine.remoteStatus === "Running") return
+      if (key === "engineStop" && engine.remoteStatus === "Off") return
+
+      const updateTime = engine.remoteUpdateTime
+        ? Date.parse(engine.remoteUpdateTime)
+        : 0
+      if (
+        key === "engineStart" &&
+        engine.errorMsg &&
+        updateTime >= commandStartedAt - 5_000
+      ) {
+        throw new Error(`远程启动失败：${engine.errorMsg}`)
+      }
+    }
+    throw new Error("指令已发送，但暂未收到车辆执行结果，请稍后刷新")
+  }
+
   const execute = async (key: string, fn: () => Promise<void>, okMsg: string) => {
     if (!sessionId || !selectedVin) return
     setBusy((b) => ({ ...b, [key]: true }))
     try {
+      const commandStartedAt = Date.now()
       await fn()
+      if (key === "engineStart" || key === "engineStop") {
+        toast.info("指令已发送，正在等待车辆确认")
+        await confirmEngineState(key, commandStartedAt)
+      } else {
+        await refresh()
+      }
       toast.success(okMsg)
-      await refresh()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "操作未完成，请稍后重试")
     } finally {
@@ -99,8 +148,9 @@ export function ControlTab() {
 
   const confirm = () => {
     if (!pending) return
-    if (data?.engine.running) {
-      toast.error("发动机运行中，远程控制已锁定")
+    // 行驶中：所有远程控制不可用（APK: CarInUse → NOT_ALLOWED_WRONG_USAGE_MODE）
+    if (carInUse) {
+      toast.error("车辆行驶中，远程控制不可用")
       setPending(null)
       return
     }
@@ -112,6 +162,19 @@ export function ControlTab() {
   const ctrl = (action: string, body?: unknown) =>
     api.control(sessionId!, selectedVin!, action, body)
 
+  const remoteEndTime = data?.engine.remoteEndTime
+    ? Date.parse(data.engine.remoteEndTime)
+    : 0
+
+  useEffect(() => {
+    if (!data?.engine.remoteRunning || !remoteEndTime) return
+    const initialTick = window.setTimeout(() => setNow(Date.now()), 0)
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000)
+    return () => {
+      window.clearTimeout(initialTick)
+      window.clearInterval(timer)
+    }
+  }, [data?.engine.remoteRunning, remoteEndTime])
 
   if (!data) {
     return (
@@ -130,15 +193,22 @@ export function ControlTab() {
       <Icon data-icon="inline-start" />
     )
 
-  const engineActive = data.engine.running
+  const carInUse = data.engine.carInUse
+  const remoteActive =
+    data.engine.remoteStatus === "Starting" ||
+    data.engine.remoteStatus === "Running" ||
+    data.engine.remoteStatus === "Stopping"
+  const remainingSeconds = remoteEndTime && now
+    ? Math.max(0, Math.ceil((remoteEndTime - now) / 1000))
+    : duration * 60
 
   return (
     <>
       <div className="flex flex-col gap-4">
-      {engineActive && (
-        <div className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning">
-          <AlertCircleIcon className="size-4 shrink-0 text-warning" />
-          发动机运行中，远程控制已锁定
+      {carInUse && (
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <AlertCircleIcon className="size-4 shrink-0 text-destructive" />
+          车辆行驶中，远程控制已锁定
         </div>
       )}
       {cap("lock", caps) !== "no" && cap("unlock", caps) !== "no" && (
@@ -156,7 +226,7 @@ export function ControlTab() {
             {data.carLocked ? (
               <Button
                 className="w-full"
-                disabled={busy.unlock || cap("unlock", caps) === "maybe" || engineActive}
+                disabled={busy.unlock || cap("unlock", caps) === "maybe" || carInUse}
                 onClick={() =>
                   request("unlock", () => ctrl("unlock"), "已发送解锁指令")
                 }
@@ -168,7 +238,7 @@ export function ControlTab() {
               <Button
                 variant="secondary"
                 className="w-full"
-                disabled={busy.lock || cap("lock", caps) === "maybe" || engineActive}
+                disabled={busy.lock || cap("lock", caps) === "maybe" || carInUse}
                 onClick={() => request("lock", () => ctrl("lock"), "已发送锁车指令")}
               >
                 {actionIcon("lock", LockIcon)}
@@ -187,8 +257,17 @@ export function ControlTab() {
             启动发动机并提前调节车内温度，最长 15 分钟
           </CardDescription>
           <CardAction>
-            {data.engine.remoteRunning && (
-              <Badge variant="default">运行中</Badge>
+            {data.engine.remoteStatus === "Starting" && (
+              <Badge variant="secondary">启动中</Badge>
+            )}
+            {data.engine.remoteStatus === "Running" && (
+              <Badge variant="default">
+                运行中
+                {remoteEndTime > 0 && ` · ${formatRemaining(remainingSeconds)}`}
+              </Badge>
+            )}
+            {data.engine.remoteStatus === "Stopping" && (
+              <Badge variant="secondary">停止中</Badge>
             )}
           </CardAction>
         </CardHeader>
@@ -202,18 +281,18 @@ export function ControlTab() {
             min={1}
             max={15}
             step={1}
-            disabled={engineActive}
+            disabled={carInUse || remoteActive}
             onValueChange={(v) => setDuration(v[0])}
           />
           <div className="flex gap-2">
             <Button
               className="flex-1"
-              disabled={busy.engineStart || engineActive}
+              disabled={busy.engineStart || carInUse || remoteActive}
               onClick={() =>
                 request(
                   "engineStart",
                   () => ctrl("engine/start", { duration }),
-                  "已发送远程启动指令"
+                  "远程启动成功"
                 )
               }
             >
@@ -223,12 +302,12 @@ export function ControlTab() {
             <Button
               variant="outline"
               className="flex-1"
-              disabled={busy.engineStop || engineActive}
+              disabled={busy.engineStop || carInUse || !remoteActive}
               onClick={() =>
                 request(
                   "engineStop",
                   () => ctrl("engine/stop"),
-                  "已发送停止远程启动指令"
+                  "远程启动已停止"
                 )
               }
             >
@@ -250,7 +329,7 @@ export function ControlTab() {
           <div className="grid grid-cols-3 gap-2">
             <Button
               variant="outline"
-              disabled={busy.flash || engineActive}
+              disabled={busy.flash || carInUse}
               onClick={() =>
                 request("flash", () => ctrl("flash"), "已发送闪灯指令")
               }
@@ -260,7 +339,7 @@ export function ControlTab() {
             </Button>
             <Button
               variant="outline"
-              disabled={busy.honk || engineActive}
+              disabled={busy.honk || carInUse}
               onClick={() => request("honk", () => ctrl("honk"), "已发送鸣笛指令")}
             >
               {actionIcon("honk", Volume2Icon)}
@@ -268,7 +347,7 @@ export function ControlTab() {
             </Button>
             <Button
               variant="outline"
-              disabled={busy.honkFlash || engineActive}
+              disabled={busy.honkFlash || carInUse}
               onClick={() =>
                 request(
                   "honkFlash",
@@ -298,7 +377,7 @@ export function ControlTab() {
             <Button
               variant="outline"
               className="flex-1"
-              disabled={busy.windowOpen || engineActive}
+              disabled={busy.windowOpen || carInUse}
               onClick={() =>
                 request(
                   "windowOpen",
@@ -313,7 +392,7 @@ export function ControlTab() {
             <Button
               variant="outline"
               className="flex-1"
-              disabled={busy.windowClose || engineActive}
+              disabled={busy.windowClose || carInUse}
               onClick={() =>
                 request(
                   "windowClose",
@@ -331,7 +410,7 @@ export function ControlTab() {
             <Button
               variant="outline"
               className="flex-1"
-              disabled={busy.sunroofOpen || engineActive}
+              disabled={busy.sunroofOpen || carInUse}
               onClick={() =>
                 request(
                   "sunroofOpen",
@@ -346,7 +425,7 @@ export function ControlTab() {
             <Button
               variant="outline"
               className="flex-1"
-              disabled={busy.sunroofClose || engineActive}
+              disabled={busy.sunroofClose || carInUse}
               onClick={() =>
                 request(
                   "sunroofClose",
@@ -364,7 +443,7 @@ export function ControlTab() {
             <Button
               variant="outline"
               className="flex-1"
-              disabled={busy.tailgateOpen || engineActive}
+              disabled={busy.tailgateOpen || carInUse}
               onClick={() =>
                 request(
                   "tailgateOpen",
@@ -379,7 +458,7 @@ export function ControlTab() {
             <Button
               variant="outline"
               className="flex-1"
-              disabled={busy.tailgateClose || engineActive}
+              disabled={busy.tailgateClose || carInUse}
               onClick={() =>
                 request(
                   "tailgateClose",
@@ -411,7 +490,7 @@ export function ControlTab() {
             <div className="flex gap-2">
               <Button
                 className="flex-1"
-                disabled={busy.preCleaningStart || engineActive}
+                disabled={busy.preCleaningStart || carInUse}
                 onClick={() =>
                   request(
                     "preCleaningStart",
@@ -426,7 +505,7 @@ export function ControlTab() {
               <Button
                 variant="outline"
                 className="flex-1"
-                disabled={busy.preCleaningStop || engineActive}
+                disabled={busy.preCleaningStop || carInUse}
                 onClick={() =>
                   request(
                     "preCleaningStop",

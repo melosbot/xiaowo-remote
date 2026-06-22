@@ -22,6 +22,8 @@ interface DemoState {
   aqi: number
   tyrePressureKpa: { fl: number; fr: number; rl: number; rr: number }
   drivingStatsTm: { distance: number; avgSpeed: number; avgFuel: number }
+  remoteStartTime: number | null
+  remoteEndTime: number | null
 }
 
 const demoStates = new Map<string, DemoState>()
@@ -45,6 +47,8 @@ function ensureState(vin: string): DemoState {
         aqi: 45,
         tyrePressureKpa: { fl: 245, fr: 240, rl: 235, rr: 242 },
         drivingStatsTm: { distance: 156.8, avgSpeed: 38, avgFuel: 18.5 },
+        remoteStartTime: null,
+        remoteEndTime: null,
       }
     } else {
       s = {
@@ -60,6 +64,8 @@ function ensureState(vin: string): DemoState {
         aqi: 45,
         tyrePressureKpa: { fl: 240, fr: 235, rl: 230, rr: 238 },
         drivingStatsTm: { distance: 234.5, avgSpeed: 42, avgFuel: 7.8 },
+        remoteStartTime: null,
+        remoteEndTime: null,
       }
     }
     demoStates.set(vin, s)
@@ -79,6 +85,10 @@ function clamp(v: number, min: number, max: number): number {
 
 /** 每次调用演进一次状态，模拟"车在动" */
 function evolve(state: DemoState): DemoState {
+  if (state.remoteEndTime !== null && state.remoteEndTime <= Date.now()) {
+    state.remoteStartTime = null
+    state.remoteEndTime = null
+  }
   // 里程缓慢累积 0.1~0.5 km
   const delta = 0.1 + Math.random() * 0.4
   state.odometerKm = Math.round((state.odometerKm + delta) * 10) / 10
@@ -165,6 +175,20 @@ export const DEMO_CAPS: VehicleCapabilities = {
   fetchedAt: Date.now(),
 }
 
+export function demoEngineControl(vin: string, start: boolean, duration: number) {
+  const state = ensureState(vin)
+  if (!start) {
+    state.remoteStartTime = null
+    state.remoteEndTime = null
+    return
+  }
+
+  const requestedDuration = Number.isFinite(duration) ? duration : 15
+  const durationMinutes = Math.min(15, Math.max(1, requestedDuration))
+  state.remoteStartTime = Date.now()
+  state.remoteEndTime = state.remoteStartTime + durationMinutes * 60_000
+}
+
 export function demoStatus(vin: string): VehicleStatus {
   const s = evolve(ensureState(vin))
   const distanceToEmpty = Math.round((s.fuelAmount / s.avgConsumption) * 100)
@@ -179,6 +203,7 @@ export function demoStatus(vin: string): VehicleStatus {
   const innerColor: string = (meta?.innerColor as string) ?? "琥珀色"
   const engineNumber: string = (meta?.engineNumber as string) ?? "B420T2-000001"
   const nickname = isElectric ? "电沃" : "小沃"
+  const remoteRunning = s.remoteEndTime !== null && s.remoteEndTime > Date.now()
   const modelYearStr = String(modelYear)
   return {
     vin,
@@ -200,9 +225,18 @@ export function demoStatus(vin: string): VehicleStatus {
       sunroof: false,
     },
     engine: {
-      running: false, remoteRunning: false,
-      remoteStartTime: null, remoteEndTime: null,
-      errorType: "Unspecifid1", errorMsg: null,
+      running: remoteRunning,
+      carInUse: false,
+      remoteRunning,
+      remoteStatus: remoteRunning ? "Running" : "Off",
+      remoteUpdateTime: new Date().toISOString(),
+      remoteStartTime: s.remoteStartTime
+        ? new Date(s.remoteStartTime).toISOString()
+        : null,
+      remoteEndTime: s.remoteEndTime
+        ? new Date(s.remoteEndTime).toISOString()
+        : null,
+      errorType: "", errorMsg: null,
     },
     fuel: {
       amount: s.fuelAmount,
