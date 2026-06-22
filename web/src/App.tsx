@@ -5,7 +5,7 @@ import { Header } from "@/components/top-bar"
 import { BottomNav } from "@/components/bottom-tab-bar"
 import { ControlTab } from "@/components/control-tab"
 import { StatusTab } from "@/components/status-tab"
-import { SettingsTab } from "@/components/settings-tab"
+import { MeTab } from "@/components/me-tab"
 import { LoginGate } from "@/components/login-gate"
 import { VehicleStatusProvider } from "@/hooks/use-vehicle-status"
 import { AccountProvider } from "@/hooks/use-account"
@@ -35,7 +35,7 @@ export function App() {
             <div className="page-enter">
               {tab === "control" && <ControlTab />}
               {tab === "status" && <StatusTab />}
-              {tab === "settings" && <SettingsTab />}
+              {tab === "me" && <MeTab />}
             </div>
           </main>
           <BottomNav active={tab} onChange={navigate} />

@@ -1,6 +1,6 @@
-import { GaugeIcon, LockIcon, SettingsIcon, type LucideIcon } from "lucide-react";
+import { GaugeIcon, LockIcon, UserRoundIcon, type LucideIcon } from "lucide-react";
 
-export type TabKey = "control" | "status" | "settings";
+export type TabKey = "control" | "status" | "me";
 
 export interface TabDef {
   key: TabKey;
@@ -11,7 +11,7 @@ export interface TabDef {
 export const TABS: TabDef[] = [
   { key: "control", label: "控制", icon: LockIcon },
   { key: "status", label: "状态", icon: GaugeIcon },
-  { key: "settings", label: "设置", icon: SettingsIcon },
+  { key: "me", label: "我的", icon: UserRoundIcon },
 ];
 
 export const DEFAULT_TAB: TabKey = "control";

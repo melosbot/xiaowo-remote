@@ -434,41 +434,6 @@ export function createApi(baseUrl: string) {
       if (data) saveCachedProfile(data)
       return data
     },
-    async getTgStatus(): Promise<{
-      configured: boolean
-      tokenHint: string
-      source: "ui" | "env" | null
-    }> {
-      return request(`${base}/api/settings/tg/status`)
-    },
-    async setTgToken(
-      token: string,
-    ): Promise<{ ok: boolean; username?: string; verified: boolean; source: string }> {
-      return request(`${base}/api/settings/tg/set-token`, {
-        method: "POST",
-        body: JSON.stringify({ token }),
-      })
-    },
-    async testTgBot(
-      token?: string,
-    ): Promise<{ ok: boolean; username?: string }> {
-      return request(`${base}/api/settings/tg/test-bot`, {
-        method: "POST",
-        body: JSON.stringify({ token: token ?? "" }),
-      })
-    },
-    async testTgPush(chatId: string): Promise<void> {
-      await request(`${base}/api/settings/tg/test-push`, {
-        method: "POST",
-        body: JSON.stringify({ chatId }),
-      })
-    },
-    async saveTgChatId(vin: string, chatId: string): Promise<void> {
-      await request(`${base}/api/settings/tg/chat-id`, {
-        method: "POST",
-        body: JSON.stringify({ vin, chatId }),
-      })
-    },
     async getMembership(sessionId: string): Promise<MembershipInfo> {
       const data = await request<MembershipInfo>(
         `${base}/api/membership?session=${encodeURIComponent(sessionId)}`
@@ -494,7 +459,6 @@ export function createApi(baseUrl: string) {
     async getSettings(sessionId: string): Promise<{
       amapKey: string
       amapSecurityCode: string
-      tgChatId: string
     }> {
       return request(
         `${base}/api/settings?session=${encodeURIComponent(sessionId)}`,
@@ -505,12 +469,10 @@ export function createApi(baseUrl: string) {
       settings: {
         amapKey?: string
         amapSecurityCode?: string
-        tgChatId?: string
       },
     ): Promise<{
       amapKey: string
       amapSecurityCode: string
-      tgChatId: string
     }> {
       return request(`${base}/api/settings`, {
         method: "POST",

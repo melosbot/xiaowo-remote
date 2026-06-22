@@ -200,27 +200,6 @@ function hasWarning(status: unknown): boolean {
   return !status.endsWith("_UNSPECIFIED") && !status.endsWith("_NO_WARNING");
 }
 
-/** 轮询告警用的 Exterior 快照 */
-export interface ExteriorSnapshot {
-  vin: string;
-  carLocked: boolean;
-  doorsOpen: {
-    frontLeft: boolean;
-    frontRight: boolean;
-    rearLeft: boolean;
-    rearRight: boolean;
-    hood: boolean;
-    tailgate: boolean;
-  };
-  windowsOpen: {
-    frontLeft: boolean;
-    frontRight: boolean;
-    rearLeft: boolean;
-    rearRight: boolean;
-    sunroof: boolean;
-  };
-}
-
 export interface VehicleStatus {
   vin: string;
   seriesName: string;
@@ -778,31 +757,6 @@ export class VehicleController {
     };
   }
 
-  /** 轻量 Exterior 快照，供轮询告警使用（不拉全量，仅 1 路 gRPC） */
-  async getExteriorSnapshot(): Promise<ExteriorSnapshot> {
-    const ext = await this.grpc.getExterior(this.vin);
-    const data = ext?.data;
-    return {
-      vin: this.vin,
-      carLocked: data?.central_lock === "LOCK_STATUS_LOCKED",
-      doorsOpen: {
-        frontLeft: isOpen(data?.front_left_door ?? "OPEN_STATUS_CLOSED"),
-        frontRight: isOpen(data?.front_right_door ?? "OPEN_STATUS_CLOSED"),
-        rearLeft: isOpen(data?.rear_left_door ?? "OPEN_STATUS_CLOSED"),
-        rearRight: isOpen(data?.rear_right_door ?? "OPEN_STATUS_CLOSED"),
-        hood: isOpen(data?.hood ?? "OPEN_STATUS_CLOSED"),
-        tailgate: isOpen(data?.tailgate ?? "OPEN_STATUS_CLOSED"),
-      },
-      windowsOpen: {
-        frontLeft: isOpen(data?.front_left_window ?? "OPEN_STATUS_CLOSED"),
-        frontRight: isOpen(data?.front_right_window ?? "OPEN_STATUS_CLOSED"),
-        rearLeft: isOpen(data?.rear_left_window ?? "OPEN_STATUS_CLOSED"),
-        rearRight: isOpen(data?.rear_right_window ?? "OPEN_STATUS_CLOSED"),
-        sunroof: isOpen(data?.sunroof ?? "OPEN_STATUS_CLOSED"),
-      },
-    };
-  }
-
   // ---- 带 capability 校验的控制方法 ----
 
   private guard(
@@ -813,6 +767,19 @@ export class VehicleController {
     if (caps) requireCapability(caps, key, label);
   }
 
+  /**
+   * 命令执行后 fire-and-forget 触发车辆状态刷新。
+   * 与官方 APK 行为对齐：远程控制后调用 UpdateStatus 让车辆上传最新状态。
+   */
+  private triggerStatusRefresh(): void {
+    this.grpc.updateStatus(this.vin).catch((err) => {
+      console.error(
+        `[updateStatus] refresh failed for ${this.vin.slice(-6)}:`,
+        (err as Error).message,
+      );
+    });
+  }
+
   async refreshFromCar(): Promise<void> {
     this.guard("updateStatus", "主动刷新");
     await this.grpc.updateStatus(this.vin);
@@ -820,68 +787,98 @@ export class VehicleController {
 
   lock = async () => {
     this.guard("lock", "锁车");
-    return this.grpc.lock(this.vin);
+    const result = await this.grpc.lock(this.vin);
+    this.triggerStatusRefresh();
+    return result;
   };
   unlock = async (unlockType?: "UNLOCK_UNSPECIFIED" | "TRUNK_ONLY") => {
     this.guard("unlock", "解锁");
-    return this.grpc.unlock(this.vin, unlockType);
+    const result = await this.grpc.unlock(this.vin, unlockType);
+    this.triggerStatusRefresh();
+    return result;
   };
   engineStart = async (duration: number) => {
     this.guard("engineRemoteStart", "远程启动");
     const requestedDuration = Number.isFinite(duration) ? duration : 15;
     const clampedDuration = Math.min(15, Math.max(1, requestedDuration));
-    return this.grpc.engineControl(this.vin, true, clampedDuration);
+    const result = await this.grpc.engineControl(this.vin, true, clampedDuration);
+    this.triggerStatusRefresh();
+    return result;
   };
   engineStop = async () => {
     this.guard("engineRemoteStart", "远程启动");
-    return this.grpc.engineControl(this.vin, false, 0);
+    const result = await this.grpc.engineControl(this.vin, false, 0);
+    this.triggerStatusRefresh();
+    return result;
   };
   honk = async () => {
     this.guard("honk", "鸣笛");
-    return this.grpc.honkFlash(this.vin, "HONK");
+    const result = await this.grpc.honkFlash(this.vin, "HONK");
+    this.triggerStatusRefresh();
+    return result;
   };
   flash = async () => {
     this.guard("flash", "闪灯");
-    return this.grpc.honkFlash(this.vin, "FLASH");
+    const result = await this.grpc.honkFlash(this.vin, "FLASH");
+    this.triggerStatusRefresh();
+    return result;
   };
   honkAndFlash = async () => {
     this.guard("honk", "鸣笛闪灯");
-    return this.grpc.honkFlash(this.vin, "HONK_AND_FLASH");
+    const result = await this.grpc.honkFlash(this.vin, "HONK_AND_FLASH");
+    this.triggerStatusRefresh();
+    return result;
   };
   windowOpen = async () => {
     this.guard("window", "车窗控制");
-    return this.grpc.windowControl(this.vin, "OPEN");
+    const result = await this.grpc.windowControl(this.vin, "OPEN");
+    this.triggerStatusRefresh();
+    return result;
   };
   windowClose = async () => {
     this.guard("window", "车窗控制");
-    return this.grpc.windowControl(this.vin, "CLOSE");
+    const result = await this.grpc.windowControl(this.vin, "CLOSE");
+    this.triggerStatusRefresh();
+    return result;
   };
   sunroofOpen = async () => {
     this.guard("sunroof", "天窗控制");
-    return this.grpc.sunroofControl(this.vin, "OPEN");
+    const result = await this.grpc.sunroofControl(this.vin, "OPEN");
+    this.triggerStatusRefresh();
+    return result;
   };
   sunroofClose = async () => {
     this.guard("sunroof", "天窗控制");
-    return this.grpc.sunroofControl(this.vin, "CLOSE");
+    const result = await this.grpc.sunroofControl(this.vin, "CLOSE");
+    this.triggerStatusRefresh();
+    return result;
   };
   tailgateOpen = async () => {
     this.guard("tailgate", "尾门控制");
-    return this.grpc.tailgateControl(this.vin, "OPEN");
+    const result = await this.grpc.tailgateControl(this.vin, "OPEN");
+    this.triggerStatusRefresh();
+    return result;
   };
   tailgateClose = async () => {
     this.guard("tailgate", "尾门控制");
-    return this.grpc.tailgateControl(this.vin, "CLOSE");
+    const result = await this.grpc.tailgateControl(this.vin, "CLOSE");
+    this.triggerStatusRefresh();
+    return result;
   };
   // SPA1 petrol cars provide cabin conditioning through remote engine start.
   climatizationStart = () => this.engineStart(15);
   climatizationStop = () => this.engineStop();
   preCleaningStart = async () => {
     this.guard("preCleaning", "空气净化");
-    return this.grpc.preCleaningStart(this.vin);
+    const result = await this.grpc.preCleaningStart(this.vin);
+    this.triggerStatusRefresh();
+    return result;
   };
   preCleaningStop = async () => {
     this.guard("preCleaning", "空气净化");
-    return this.grpc.preCleaningStop(this.vin);
+    const result = await this.grpc.preCleaningStop(this.vin);
+    this.triggerStatusRefresh();
+    return result;
   };
 
   close(): void {

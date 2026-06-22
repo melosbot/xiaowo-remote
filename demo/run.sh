@@ -22,7 +22,6 @@ banner() {
   echo "  ║  内置账号: 13800000000 / demo          ║"
   echo "  ║  服务地址: $BASE_URL"
   echo "  ║  数据目录: $DATA_DIR"
-  echo "  ║  TG 推送: ${TG_BOT_TOKEN:-(未配置)}"
   echo "  ╚══════════════════════════════════════╝"
   echo ""
 }

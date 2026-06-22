@@ -2,7 +2,7 @@
  * 用户设置持久化
  *
  * 按手机号索引，存储在 DATA_DIR/settings.json。
- * AMap Key、安全密钥、TG Chat ID 等设置跟随账号，换设备登录自动同步。
+ * AMap Key、安全密钥等设置跟随账号，换设备登录自动同步。
  */
 
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
@@ -14,11 +14,10 @@ const STORE_FILE = path.join(DATA_DIR, "settings.json");
 export interface UserSettings {
   amapKey: string;
   amapSecurityCode: string;
-  tgChatId: string;
 }
 
 function empty(): UserSettings {
-  return { amapKey: "", amapSecurityCode: "", tgChatId: "" };
+  return { amapKey: "", amapSecurityCode: "" };
 }
 
 function ensureDir(): void {
@@ -65,7 +64,6 @@ export function updateUserSettings(
   const updated: UserSettings = {
     amapKey: patch.amapKey ?? current.amapKey,
     amapSecurityCode: patch.amapSecurityCode ?? current.amapSecurityCode,
-    tgChatId: patch.tgChatId ?? current.tgChatId,
   };
   store[phone] = updated;
   writeStore(store);

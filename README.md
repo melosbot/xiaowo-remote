@@ -13,9 +13,9 @@
 
 ## 截图
 
-| 控制 | 状态 | 设置 |
+| 控制 | 状态 | 我的 |
 |------|------|------|
-| ![控制页](docs/pictures/control.jpg) | ![状态页](docs/pictures/status.jpg) | ![设置页](docs/pictures/settings.jpg) |
+| ![控制页](docs/pictures/control.jpg) | ![状态页](docs/pictures/status.jpg) | ![我的页](docs/pictures/settings.jpg) |
 
 ## 快速体验
 
@@ -45,7 +45,7 @@
 - 车内空气净化启停
 - 主动刷新车辆状态
 
-控制按钮点击后弹出确认对话框，防止误触。状态轮询间隔 15±5 分钟随机。
+控制按钮点击后弹出确认对话框，防止误触。状态更新采用事件驱动（进入页面 / 手动刷新 / 控制后自动更新），不做定时轮询。
 
 **会员与账户**
 - 账户概览：头像、昵称、会员等级、V 值余额、成长值进度
@@ -55,10 +55,6 @@
 **能力感知**
 - 后端依据 VIN 向沃尔沃能力接口查询车辆支持的远程功能
 - 不支持的卡片在前端自动隐藏，未确认时按钮禁用
-
-**TG 推送**
-- 可配置 Telegram Bot，离车时推送告警通知（未锁、窗未关等）
-- Bot Token 支持网页配置或环境变量注入
 
 **其他**
 - 深色模式支持
@@ -88,9 +84,9 @@
 │       ├── components/           页面与 UI 组件
 │       │   ├── control-tab.tsx   控制页
 │       │   ├── status-tab.tsx    状态页
-│       │   └── settings-tab.tsx  设置页（含登录、车辆切换、地图/TG 配置）
+│       │   └── me-tab.tsx        我的（登录、车辆切换、地图配置）
 │       ├── hooks/                React hooks（认证、车辆状态、账户会员）
-│       └── lib/                  工具库（API 客户端、认证、地图、TG）
+│       └── lib/                  工具库（API 客户端、认证、地图）
 ├── server/                       Express API 服务端
 │   └── src/
 │       ├── index.ts              Express 路由（含 demo 账号、REST + gRPC 代理）
@@ -102,8 +98,6 @@
 │           ├── signing.ts        HMAC-SHA256 签名
 │           ├── vehicle.ts        车辆状态聚合 + 控制指令 + 油箱容量表
 │           ├── capabilities.ts   能力查询 / 缓存 / 守卫
-│           ├── polling.ts        轮询告警（离车检测 + TG 推送）
-│           ├── tg-notify.ts      Telegram Bot 推送
 │           ├── settings-store.ts 用户设置按账号持久化
 │           ├── client-profile.ts 版本与 Header 集中配置
 │           └── demo.ts           Demo 数据
@@ -202,7 +196,6 @@ cd web && npm run dev         # 前端 → :5173，自动代理 API
 | `PORT` | `8787` | 监听端口 |
 | `WEB_ROOT` | `web/dist` | 前端静态文件目录 |
 | `DATA_DIR` | `./data` | 会话、设置持久化目录 |
-| `TG_BOT_TOKEN` | 空 | Telegram Bot Token（环境变量注入，优先级低于网页配置） |
 
 ## 检查
 
