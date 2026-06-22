@@ -123,14 +123,17 @@ function VehicleStatusProviderForVin({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!active) return
-    // 冷却期内跳过，直接读缓存（防刷页面）
-    if (shouldThrottleFetch()) return
+    // 冷却期内跳过，有缓存直接标记在线
+    if (shouldThrottleFetch()) {
+      setConnection("online")
+      return
+    }
     void fetchStatus().then(() => markFetchDone())
     // 定期刷新：15±5 分钟随机
     const interval = 10 * 60_000 + Math.random() * 10 * 60_000
     const timer = setInterval(() => { void fetchStatus() }, interval)
     return () => clearInterval(timer)
-  }, [active, fetchStatus])
+  }, [active, fetchStatus, setConnection])
 
   const currentSnapshot =
     snapshot.vin === (selectedVin ?? "")
