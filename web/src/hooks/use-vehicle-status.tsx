@@ -13,6 +13,8 @@ import { useAuth } from "@/lib/auth"
 import {
   loadVehicleStatus,
   saveVehicleStatus,
+  shouldThrottleFetch,
+  markFetchDone,
   type VehicleStatus,
 } from "@/lib/api"
 
@@ -121,8 +123,13 @@ function VehicleStatusProviderForVin({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!active) return
-    void fetchStatus()
-    // 不再定时轮询；控制操作后由调用方主动 refresh，或用户手动刷新
+    // 冷却期内跳过，直接读缓存（防刷页面）
+    if (shouldThrottleFetch()) return
+    void fetchStatus().then(() => markFetchDone())
+    // 定期刷新：15±5 分钟随机
+    const interval = 10 * 60_000 + Math.random() * 10 * 60_000
+    const timer = setInterval(() => { void fetchStatus() }, interval)
+    return () => clearInterval(timer)
   }, [active, fetchStatus])
 
   const currentSnapshot =

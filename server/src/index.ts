@@ -10,6 +10,8 @@ import {
   getSession,
   destroySession,
   validateSession,
+  getSessionProfile,
+  getSessionBase,
   restoreSessions,
   SessionError,
   getActivePollingTargets,
@@ -49,6 +51,17 @@ process.on("uncaughtException", (err) => {
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// 请求日志：记录所有 /api/ 请求，便于调试
+app.use((req, _res, next) => {
+  if (req.path.startsWith("/api/")) {
+    const body = req.method === "POST" || req.method === "PUT"
+      ? JSON.stringify(req.body).slice(0, 500)
+      : "";
+    console.log(`[req] ${req.method} ${req.path} ${body}`);
+  }
+  next();
+});
 
 // Demo session store
 const demoStore = new Map<string, { vehicles: typeof DEMO_VEHICLES }>();
@@ -99,6 +112,73 @@ async function withSession<T>(
 
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true });
+});
+
+app.get("/api/account", async (req, res) => {
+  const sessionId = String((req.query as AuthBody).session ?? "");
+  if (!sessionId) { res.status(401).json({ error: "未登录" }); return }
+  if (isDemo(sessionId)) {
+    res.json({
+      firstName: "Demo",
+      lastName: "",
+      nickName: "Demo",
+      headPortrait: "",
+      mobile: DEMO_PHONE,
+      memberId: "",
+      vocId: "",
+    });
+    return;
+  }
+  await withSession(req, res, async (sessionId) => {
+    return getSessionProfile(sessionId);
+  });
+});
+
+app.get("/api/membership", async (req, res) => {
+  const sessionId = String((req.query as AuthBody).session ?? "");
+  if (!sessionId) { res.status(401).json({ error: "未登录" }); return }
+  if (isDemo(sessionId)) {
+    res.json({
+      vTotalValue: 0, vRestValue: 0, monthValue: 0,
+      expireTime: "", levelTitle: "Demo", levelNumber: 0,
+      levelProgress: 0, growthValue: 0, growthValueForUpgrade: 0,
+      uniqueNumberCode: "",
+    });
+    return;
+  }
+  await withSession(req, res, async (sessionId) => {
+    const base = getSessionBase(sessionId);
+    if (!base) return null;
+    const info = await base.getMembershipInfo();
+    if (!info) return null;
+    return info;
+  });
+});
+
+app.get("/api/membership/signin", async (req, res) => {
+  const sessionId = String((req.query as AuthBody).session ?? "");
+  if (!sessionId) { res.status(401).json({ error: "未登录" }); return }
+  if (isDemo(sessionId)) { res.json({ signInState: false, signInCount: 0 }); return }
+  await withSession(req, res, async (sessionId) => {
+    const base = getSessionBase(sessionId);
+    if (!base) return null;
+    const profile = base.userProfile;
+    if (!profile?.memberId) return null;
+    return base.getSignInStatus(profile.memberId);
+  });
+});
+
+app.post("/api/membership/signin", async (req, res) => {
+  const sessionId = String((req.body as AuthBody).session ?? "");
+  if (!sessionId) { res.status(401).json({ error: "未登录" }); return }
+  if (isDemo(sessionId)) { res.json({ signInState: true, signInCount: 1 }); return }
+  await withSession(req, res, async (sessionId) => {
+    const base = getSessionBase(sessionId);
+    if (!base) return null;
+    const profile = base.userProfile;
+    if (!profile?.memberId) return null;
+    return base.doSignIn(profile.memberId);
+  });
 });
 
 app.post("/api/login", async (req, res) => {

@@ -183,9 +183,84 @@ export interface PersistedAuth {
   savedAt: number
 }
 
+export interface MembershipInfo {
+  vTotalValue: number
+  vRestValue: number
+  monthValue: number
+  expireTime: string
+  levelTitle: string
+  levelNumber: number
+  levelProgress: number
+  growthValue: number
+  growthValueForUpgrade: number
+  uniqueNumberCode: string
+}
+
+export interface SignInStatus {
+  signInState: boolean
+  signInCount: number
+}
+
+export interface UserProfile {
+  /** 姓 */
+  firstName: string
+  /** 名 */
+  lastName: string
+  /** 昵称 */
+  nickName: string
+  /** 头像 URL */
+  headPortrait: string
+  /** 手机号 */
+  mobile: string
+  /** 会员 ID */
+  memberId: string
+  /** Volvo ID */
+  vocId: string
+}
+
 export interface PersistedCredentials {
   phone: string
   password: string
+}
+
+const PROFILE_CACHE_KEY = "volvo-pwa-profile"
+const MEMBERSHIP_CACHE_KEY = "volvo-pwa-membership"
+const LAST_FETCH_KEY = "volvo-pwa-last-fetch"
+
+/** 两次强制刷新最小间隔（毫秒），防刷 */
+const FETCH_COOLDOWN_MS = 5 * 60_000 // 5 分钟
+
+export function shouldThrottleFetch(): boolean {
+  try {
+    const last = localStorage.getItem(LAST_FETCH_KEY)
+    return last ? Date.now() - Number(last) < FETCH_COOLDOWN_MS : false
+  } catch { return false }
+}
+
+export function markFetchDone(): void {
+  localStorage.setItem(LAST_FETCH_KEY, String(Date.now()))
+}
+
+export function loadCachedProfile(): UserProfile | null {
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY)
+    return raw ? (JSON.parse(raw) as UserProfile) : null
+  } catch { return null }
+}
+
+function saveCachedProfile(p: UserProfile) {
+  localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(p))
+}
+
+export function loadCachedMembership(): MembershipInfo | null {
+  try {
+    const raw = localStorage.getItem(MEMBERSHIP_CACHE_KEY)
+    return raw ? (JSON.parse(raw) as MembershipInfo) : null
+  } catch { return null }
+}
+
+function saveCachedMembership(m: MembershipInfo) {
+  localStorage.setItem(MEMBERSHIP_CACHE_KEY, JSON.stringify(m))
 }
 
 export function loadCredentials(): PersistedCredentials | null {
@@ -324,6 +399,13 @@ export function createApi(baseUrl: string) {
       )
       return r.capabilities
     },
+    async getAccount(sessionId: string): Promise<UserProfile | null> {
+      const data = await request<UserProfile>(
+        `${base}/api/account?session=${encodeURIComponent(sessionId)}`
+      )
+      if (data) saveCachedProfile(data)
+      return data
+    },
     async getTgStatus(): Promise<{
       configured: boolean
       tokenHint: string
@@ -357,6 +439,26 @@ export function createApi(baseUrl: string) {
       await request(`${base}/api/settings/tg/chat-id`, {
         method: "POST",
         body: JSON.stringify({ vin, chatId }),
+      })
+    },
+    async getMembership(sessionId: string): Promise<MembershipInfo> {
+      const data = await request<MembershipInfo>(
+        `${base}/api/membership?session=${encodeURIComponent(sessionId)}`
+      )
+      if (data) saveCachedMembership(data)
+      return data
+    },
+    async getSignInStatus(
+      sessionId: string,
+    ): Promise<SignInStatus> {
+      return request(
+        `${base}/api/membership/signin?session=${encodeURIComponent(sessionId)}`
+      )
+    },
+    async doSignIn(sessionId: string): Promise<SignInStatus> {
+      return request(`${base}/api/membership/signin`, {
+        method: "POST",
+        body: JSON.stringify({ session: sessionId }),
       })
     },
     async getSettings(sessionId: string): Promise<{

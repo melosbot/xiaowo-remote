@@ -6,11 +6,22 @@ import {
   SaveIcon,
   FlaskConicalIcon,
   SendIcon,
+  GiftIcon,
+  CalendarCheckIcon,
+  TrendingUpIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useAuth } from "@/lib/auth"
 import { useVehicleStatus } from "@/hooks/use-vehicle-status"
-import { loadCredentials } from "@/lib/api"
+import {
+  loadCredentials,
+  loadCachedProfile,
+  loadCachedMembership,
+  shouldThrottleFetch,
+  markFetchDone,
+  type UserProfile,
+  type MembershipInfo,
+} from "@/lib/api"
 import {
   clearAmapConfig,
   loadAmapConfig,
@@ -19,6 +30,7 @@ import {
 import { loadTgConfig, saveTgConfig } from "@/lib/tg"
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardFooter,
@@ -54,6 +66,13 @@ export function SettingsTab() {
   )
   const [remember, setRemember] = useState(() => !!loadCredentials())
   const [submitting, setSubmitting] = useState(false)
+  const [account, setAccount] = useState<UserProfile | null>(() => loadCachedProfile())
+  const [membership, setMembership] = useState<MembershipInfo | null>(() => loadCachedMembership())
+  const [signIn, setSignIn] = useState<{
+    signInState: boolean
+    signInCount: number
+  } | null>(null)
+  const [signingIn, setSigningIn] = useState(false)
   const [amapKeyInput, setAmapKeyInput] = useState("")
   const [amapSecurityInput, setAmapSecurityInput] = useState("")
   const [amapTesting, setAmapTesting] = useState(false)
@@ -70,6 +89,49 @@ export function SettingsTab() {
     tokenHint: string
     source: "ui" | "env" | null
   } | null>(null)
+  // 手动刷新账户 + 会员数据（不受节流限制）
+  const refreshAccount = async () => {
+    if (!sessionId) return
+    const [acc, mem, sig] = await Promise.allSettled([
+      api.getAccount(sessionId),
+      api.getMembership(sessionId),
+      api.getSignInStatus(sessionId),
+    ])
+    if (acc.status === "fulfilled" && acc.value) setAccount(acc.value)
+    if (mem.status === "fulfilled") setMembership(mem.value)
+    if (sig.status === "fulfilled") setSignIn(sig.value)
+    markFetchDone()
+  }
+
+  // 加载时刷一次（冷却期内跳过）+ 监听顶部刷新按钮
+  useEffect(() => {
+    if (!sessionId) return
+    if (!shouldThrottleFetch()) {
+      void refreshAccount()
+    }
+    const handler = () => { void refreshAccount() }
+    window.addEventListener("volvo-refresh", handler)
+    return () => window.removeEventListener("volvo-refresh", handler)
+  }, [sessionId, api])
+
+  const handleSignIn = async () => {
+    if (!sessionId || signingIn) return
+    setSigningIn(true)
+    try {
+      const result = await api.doSignIn(sessionId)
+      setSignIn(result)
+      if (result.signInState) {
+        toast.success("签到成功！")
+        // 签到后更新会员数据
+        api.getMembership(sessionId).then(setMembership).catch(() => {})
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "签到失败")
+    } finally {
+      setSigningIn(false)
+    }
+  }
+
   // 从服务端拉取设置（跟随账号）
   useEffect(() => {
     api.getTgStatus().then(setTgStatus).catch(() => {})
@@ -238,52 +300,147 @@ export function SettingsTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>账号与登录</CardTitle>
-          <CardDescription>管理沃尔沃汽车 App 中国区账号</CardDescription>
-        </CardHeader>
-        <form onSubmit={handleLogin} className="contents">
-          <CardContent>
-            <FieldGroup className="gap-4">
-              <Field>
-                <FieldLabel htmlFor="phone">手机号</FieldLabel>
-                <Input
-                  id="phone"
-                  inputMode="numeric"
-                  placeholder="请输入手机号"
-                  value={phoneInput}
-                  onChange={(e) => setPhoneInput(e.target.value)}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="password">密码</FieldLabel>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="请输入沃尔沃汽车 App 密码"
-                  value={passwordInput}
-                  onChange={(e) => setPasswordInput(e.target.value)}
-                />
-              </Field>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">记住密码</span>
-                <Switch checked={remember} onCheckedChange={setRemember} />
+      {sessionId && account ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>账号信息</CardTitle>
+            <CardDescription>
+              {account.mobile}
+              {membership && ` · ${membership.levelTitle} No.${membership.uniqueNumberCode}`}
+            </CardDescription>
+            <CardAction>
+              <div className="flex items-center gap-2">
+                {membership && (
+                  <Button
+                    variant={signIn?.signInState ? "secondary" : "default"}
+                    size="sm"
+                    disabled={signIn?.signInState || signingIn}
+                    onClick={handleSignIn}
+                  >
+                    {signingIn ? (
+                      <Spinner data-icon="inline-start" />
+                    ) : (
+                      <CalendarCheckIcon data-icon="inline-start" />
+                    )}
+                    {signIn?.signInState ? "已签" : "签到"}
+                  </Button>
+                )}
+                <Button variant="outline" size="sm" onClick={handleLogout}>
+                  <LogOutIcon data-icon="inline-start" />
+                </Button>
               </div>
-            </FieldGroup>
-          </CardContent>
-          <CardFooter>
-            <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting ? (
-                <Spinner data-icon="inline-start" />
+            </CardAction>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex items-center gap-4">
+              {account.headPortrait ? (
+                <img
+                  src={account.headPortrait}
+                  alt=""
+                  className="size-14 rounded-full object-cover"
+                />
               ) : (
-                <LogInIcon data-icon="inline-start" />
+                <div className="flex size-14 items-center justify-center rounded-full bg-muted text-xl text-muted-foreground">
+                  {(account.nickName || account.lastName + account.firstName || "?").charAt(0)}
+                </div>
               )}
-              {submitting ? "登录中" : sessionId ? "重新登录" : "登录"}
-            </Button>
-          </CardFooter>
-        </form>
-      </Card>
+              <div className="flex flex-col gap-0.5">
+                <span className="text-base font-semibold">
+                  {account.lastName}{account.firstName}
+                </span>
+                {account.nickName && (
+                  <span className="text-sm text-muted-foreground">{account.nickName}</span>
+                )}
+              </div>
+            </div>
+            {membership && (
+              <>
+                <Separator />
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="flex flex-col items-center gap-0.5 rounded-lg bg-muted/50 py-2">
+                    <GiftIcon className="size-4 text-primary" />
+                    <span className="text-lg font-bold">{membership.vRestValue}</span>
+                    <span className="text-[10px] text-muted-foreground">可用 V 值</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-0.5 rounded-lg bg-muted/50 py-2">
+                    <TrendingUpIcon className="size-4 text-primary" />
+                    <span className="text-lg font-bold">{membership.growthValue}</span>
+                    <span className="text-[10px] text-muted-foreground">成长值</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-0.5 rounded-lg bg-muted/50 py-2">
+                    <CalendarCheckIcon className="size-4 text-primary" />
+                    <span className="text-lg font-bold">{signIn?.signInCount ?? 0}</span>
+                    <span className="text-[10px] text-muted-foreground">本月签到</span>
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>距下一级还差 {membership.growthValueForUpgrade} 成长值</span>
+                    <span>{Math.round(membership.levelProgress * 100)}%</span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full bg-primary transition-all"
+                      style={{ width: `${Math.min(100, membership.levelProgress * 100)}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                  <span>本月 +{membership.monthValue} V值</span>
+                  {membership.expireTime && <span>到期 {membership.expireTime}</span>}
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>账号与登录</CardTitle>
+            <CardDescription>管理沃尔沃汽车 App 中国区账号</CardDescription>
+          </CardHeader>
+          <form onSubmit={handleLogin} className="contents">
+            <CardContent>
+              <FieldGroup className="gap-4">
+                <Field>
+                  <FieldLabel htmlFor="phone">手机号</FieldLabel>
+                  <Input
+                    id="phone"
+                    inputMode="numeric"
+                    placeholder="请输入手机号"
+                    value={phoneInput}
+                    onChange={(e) => setPhoneInput(e.target.value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="password">密码</FieldLabel>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="请输入沃尔沃汽车 App 密码"
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                  />
+                </Field>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">记住密码</span>
+                  <Switch checked={remember} onCheckedChange={setRemember} />
+                </div>
+              </FieldGroup>
+            </CardContent>
+            <CardFooter>
+              <Button type="submit" className="w-full" disabled={submitting}>
+                {submitting ? (
+                  <Spinner data-icon="inline-start" />
+                ) : (
+                  <LogInIcon data-icon="inline-start" />
+                )}
+                {submitting ? "登录中" : "登录"}
+              </Button>
+            </CardFooter>
+          </form>
+        </Card>
+      )}
 
       {sessionId && vehicles.length > 0 && (
         <Card>
@@ -539,12 +696,6 @@ export function SettingsTab() {
         </CardContent>
       </Card>
 
-      {sessionId && (
-        <Button variant="outline" onClick={handleLogout}>
-          <LogOutIcon data-icon="inline-start" />
-          退出
-        </Button>
-      )}
     </div>
   )
 }

@@ -24,6 +24,41 @@ export interface BoundVehicle {
   [k: string]: unknown;
 }
 
+export interface UserProfile {
+  /** 姓（来自 JWT） */
+  firstName: string;
+  /** 名（来自 JWT） */
+  lastName: string;
+  /** 昵称 */
+  nickName: string;
+  /** 头像 URL */
+  headPortrait: string;
+  /** 手机号 */
+  mobile: string;
+  /** 会员 ID */
+  memberId: string;
+  /** Volvo ID */
+  vocId: string;
+}
+
+export interface MembershipInfo {
+  vTotalValue: number;
+  vRestValue: number;
+  monthValue: number;
+  expireTime: string;
+  levelTitle: string;
+  levelNumber: number;
+  levelProgress: number;
+  growthValue: number;
+  growthValueForUpgrade: number;
+  uniqueNumberCode: string;
+}
+
+export interface SignInStatus {
+  signInState: boolean;
+  signInCount: number;
+}
+
 export class VolvoAPIError extends Error {}
 
 export class VehicleBaseAPI {
@@ -32,6 +67,7 @@ export class VehicleBaseAPI {
   private digitalvolvoAccessToken = "";
   private digitalvolvoXToken = "";
   private expireAt = 0;
+  private profile: UserProfile | null = null;
 
   constructor(
     public username: string,
@@ -50,6 +86,11 @@ export class VehicleBaseAPI {
   /** REST X-Token（JWT） */
   get xtoken(): string {
     return this.digitalvolvoXToken;
+  }
+
+  /** 登录后获取的用户信息 */
+  get userProfile(): UserProfile | null {
+    return this.profile;
   }
 
   private async requestDigitalvolvo(
@@ -101,6 +142,27 @@ export class VehicleBaseAPI {
     this.digitalvolvoAccessToken = data.accessToken;
     this.digitalvolvoXToken = data.jwtToken;
     this.expireAt = now + Number(data.expiresIn);
+
+    // 从 JWT 提取姓名 + 登录响应提取账户标识
+    try {
+      const payload = JSON.parse(
+        Buffer.from(
+          String(data.globalAccessToken).split(".")[1],
+          "base64url",
+        ).toString("utf8"),
+      );
+      this.profile = {
+        firstName: String(payload.firstName ?? ""),
+        lastName: String(payload.lastName ?? ""),
+        nickName: String(data.nickName ?? ""),
+        headPortrait: String(data.headPortrait ?? ""),
+        mobile: String(data.mobile ?? ""),
+        memberId: String(data.memberId ?? ""),
+        vocId: String(data.vocId ?? payload.sub ?? ""),
+      };
+    } catch {
+      this.profile = null;
+    }
   }
 
   async updateToken(): Promise<void> {
@@ -121,5 +183,77 @@ export class VehicleBaseAPI {
     const url = `${REST_BASE_URL}/app/account/vehicles/api/v1/owner/listBindCar`;
     const result = await this.requestDigitalvolvo("GET", url);
     return (result?.data ?? []) as BoundVehicle[];
+  }
+
+  /** 获取会员信息（V值、等级、成长值） */
+  async getMembershipInfo(): Promise<MembershipInfo | null> {
+    const url = `${REST_BASE_URL}/app/membership/api/v2/getBasicMemberInfo`;
+    const result = await this.requestDigitalvolvo("GET", url);
+    const d = result?.data;
+    if (!d) return null;
+    return {
+      vTotalValue: Number(d.vTotalValue ?? 0),
+      vRestValue: Number(d.vRestValue ?? 0),
+      monthValue: Number(d.monthValue ?? 0),
+      expireTime: String(d.expireTime ?? ""),
+      levelTitle: String(d.levelTitle ?? ""),
+      levelNumber: Number(d.levelNumber ?? 0),
+      levelProgress: Number(d.levelProgress ?? 0),
+      growthValue: Number(d.growthValue ?? 0),
+      growthValueForUpgrade: Number(d.growthValueForUpgrade ?? 0),
+      uniqueNumberCode: String(d.uniqueNumberCode ?? ""),
+    };
+  }
+
+  /** 获取签到状态（从任务列表判断签到任务是否已完成） */
+  async getSignInStatus(memberId: string): Promise<SignInStatus | null> {
+    // 从签到接口获取 signInCount
+    const signUrl = `${REST_BASE_URL}/app/app/newSign/signIn`;
+    const signResult = await this.requestDigitalvolvo("POST", signUrl, { memberId });
+    const signCount = Number(signResult?.data?.signInCount ?? 0);
+
+    // 从任务列表判断今日是否已签（eventCode=C_EVENT_000036）
+    const taskUrl = `${REST_BASE_URL}/app/membership/api/v2/getTasksByMemberIdAndChannel?memberId=${memberId}&channel=app`;
+    const taskResult = await this.requestDigitalvolvo("GET", taskUrl);
+    const taskGroups = taskResult?.data ?? [];
+    let todaySigned = false;
+    for (const group of taskGroups) {
+      for (const item of group.item ?? []) {
+        if (item.eventCode === "C_EVENT_000036" && item.complete === true) {
+          todaySigned = true;
+        }
+      }
+    }
+
+    return { signInState: todaySigned, signInCount: signCount };
+  }
+
+  /** 执行签到 */
+  async doSignIn(memberId: string): Promise<SignInStatus | null> {
+    // 先检查今天是否已签
+    const status = await this.getSignInStatus(memberId);
+    if (status?.signInState) {
+      throw new Error("今日已签到，请明天再来");
+    }
+
+    // 尝试执行签到——POST /app/app/newSign/signIn 可能既是查询也是执行
+    // 签到时传额外字段触发，具体格式明天未签时抓日志确认
+    console.log("[sign-in] attempting sign-in for memberId:", memberId);
+
+    // 尝试 1: 基础 memberId
+    const url = `${REST_BASE_URL}/app/app/newSign/signIn`;
+    let result = await this.requestDigitalvolvo("POST", url, { memberId });
+    console.log("[sign-in] POST {memberId} →", JSON.stringify(result?.data).slice(0, 300));
+
+    // 尝试 2: 加 channel
+    result = await this.requestDigitalvolvo("POST", url, { memberId, channel: "app" });
+    console.log("[sign-in] POST {memberId, channel} →", JSON.stringify(result?.data).slice(0, 300));
+
+    // 尝试 3: signIn flag
+    result = await this.requestDigitalvolvo("POST", url, { memberId, signIn: 1 });
+    console.log("[sign-in] POST {memberId, signIn:1} →", JSON.stringify(result?.data).slice(0, 300));
+
+    // 重新查状态
+    return this.getSignInStatus(memberId);
   }
 }

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { VehicleBaseAPI, type BoundVehicle } from "./volvo/base.js";
+import { VehicleBaseAPI, type BoundVehicle, type UserProfile } from "./volvo/base.js";
 import { VehicleController } from "./volvo/vehicle.js";
 import {
   persistSession,
@@ -186,6 +186,18 @@ export function getNotifyChatIdForVin(vin: string): string | null {
 /** 获取 session 对应的手机号 */
 export function getSessionPhone(sessionId: string): string | null {
   return sessions.get(sessionId)?.phone ?? null;
+}
+
+/** 获取 session 对应的用户信息 */
+export function getSessionProfile(sessionId: string): UserProfile | null {
+  return sessions.get(sessionId)?.base.userProfile ?? null;
+}
+
+/** 获取 session 的 base API，用于调用 membership/sign-in 等 */
+export function getSessionBase(
+  sessionId: string,
+): import("./volvo/base.js").VehicleBaseAPI | null {
+  return sessions.get(sessionId)?.base ?? null;
 }
 
 export class SessionError extends Error {}

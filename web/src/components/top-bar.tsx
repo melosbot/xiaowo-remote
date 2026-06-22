@@ -32,9 +32,11 @@ export function Header() {
         : "离线"
 
   const handleRefresh = async () => {
+    // 触发全局刷新：车辆状态 + 账户/会员数据
+    window.dispatchEvent(new CustomEvent("volvo-refresh"))
     const refreshed = await refresh()
-    if (refreshed) toast.success("车辆状态已刷新")
-    else toast.error("暂时无法刷新车辆状态，请稍后重试")
+    if (refreshed) toast.success("状态已刷新")
+    else toast.error("暂时无法刷新，请稍后重试")
   }
 
   return (
