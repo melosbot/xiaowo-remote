@@ -6,6 +6,7 @@ export { DEMO_PHONE as demoPhone, DEMO_PASSWORD as demoPassword }
 import type { BoundVehicle } from "./base.js"
 import type { VehicleStatus } from "./vehicle.js"
 import type { VehicleCapabilities } from "./capabilities.js"
+import { evaluateLockState, getUnlockReminder } from "./unlock-reminder.js"
 
 // ---- Demo 状态演进：让每次刷新都能看到数据变化 ----
 
@@ -212,7 +213,18 @@ export function demoStatus(vin: string): VehicleStatus {
     modelYear,
     nickname,
     isAaos: false,
-    carLocked: true,
+    carLocked: (() => {
+      const bucket = Math.floor(Date.now() / 600_000);
+      const hash = (vin.split("").reduce((a, c) => a + c.charCodeAt(0), 0) + bucket) % 10;
+      return hash >= 7; // ~70% 未锁（方便测试解锁提醒 UI）
+    })(),
+    unlockReminder: (() => {
+      const bucket = Math.floor(Date.now() / 600_000);
+      const hash = (vin.split("").reduce((a, c) => a + c.charCodeAt(0), 0) + bucket) % 10;
+      const carLocked = hash >= 7;
+      evaluateLockState(vin, carLocked);
+      return getUnlockReminder(vin, 0);
+    })(),
     doors: {
       frontLeft: false, frontRight: false, rearLeft: false, rearRight: false,
       hood: false, tailgate: false, tankLid: false,

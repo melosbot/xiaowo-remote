@@ -18,6 +18,12 @@ export interface VehicleStatus {
   nickname: string
   isAaos: boolean
   carLocked: boolean
+  /** 车门未锁提醒 */
+  unlockReminder: {
+    active: boolean
+    minutesSinceUnlock: number
+    detectedAt: string | null
+  } | null
   doors: {
     frontLeft: boolean
     frontRight: boolean

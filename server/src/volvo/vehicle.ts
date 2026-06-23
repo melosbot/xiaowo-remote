@@ -2,6 +2,12 @@ import { log } from "./log.js";
 import { VehicleBaseAPI, type BoundVehicle } from "./base.js";
 import { VehicleGrpcAPI } from "./grpc.js";
 import {
+  evaluateLockState,
+  getUnlockReminder,
+  clearUnlockReminder,
+  type UnlockReminder,
+} from "./unlock-reminder.js";
+import {
   getCapabilities,
   getCachedCapabilities,
   requireCapability,
@@ -209,6 +215,8 @@ export interface VehicleStatus {
   nickname: string;
   isAaos: boolean;
   carLocked: boolean;
+  /** 车门未锁提醒（超阈值后出现） */
+  unlockReminder: UnlockReminder | null;
   doors: {
     frontLeft: boolean;
     frontRight: boolean;
@@ -497,6 +505,11 @@ export class VehicleController {
       nickname: prf?.nickName ?? "",
       isAaos: this.isAaos,
       carLocked: ext ? ext.central_lock === "LOCK_STATUS_LOCKED" : false,
+      unlockReminder: (() => {
+        const locked = ext ? ext.central_lock === "LOCK_STATUS_LOCKED" : false;
+        evaluateLockState(vin, locked);
+        return getUnlockReminder(vin);
+      })(),
       doors: {
         frontLeft: isOpen(ext?.front_left_door ?? "OPEN_STATUS_CLOSED"),
         frontRight: isOpen(ext?.front_right_door ?? "OPEN_STATUS_CLOSED"),
@@ -786,6 +799,7 @@ export class VehicleController {
   lock = async () => {
     this.guard("lock", "锁车");
     const result = await this.grpc.lock(this.vin);
+    clearUnlockReminder(this.vin);
     this.triggerStatusRefresh();
     return result;
   };

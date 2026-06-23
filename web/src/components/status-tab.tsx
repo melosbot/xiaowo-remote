@@ -1,5 +1,5 @@
 import { type ReactNode } from "react"
-import { ExternalLinkIcon, RefreshCwIcon, FuelIcon } from "lucide-react"
+import { ExternalLinkIcon, RefreshCwIcon, FuelIcon, AlertTriangleIcon } from "lucide-react"
 import { useVehicleStatus } from "@/hooks/use-vehicle-status"
 import {
   Card,
@@ -200,6 +200,22 @@ export function StatusTab() {
               {data.carLocked ? "已锁定" : "未锁定"}
             </span>
           </div>
+          {data.unlockReminder?.active && (
+            <div className="flex items-center gap-2 mt-2 p-3 rounded-md border border-destructive/50 bg-destructive/5">
+              <AlertTriangleIcon className="size-4 text-destructive shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-destructive">
+                  车辆未锁定提醒
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  已解锁 {data.unlockReminder.minutesSinceUnlock} 分钟
+                  {data.unlockReminder.minutesSinceUnlock >= 30
+                    ? "，建议尽快确认车辆状态"
+                    : "，是否忘记锁车？"}
+                </p>
+              </div>
+            </div>
+          )}
           <div className="flex items-center gap-2">
             <span
               className={cn(
