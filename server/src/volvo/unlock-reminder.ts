@@ -6,14 +6,10 @@
  * 也会通过此模块更新（未来扩展点）。
  */
 
-export interface UnlockReminder {
-  /** 是否有活跃的未锁提醒 */
-  active: boolean;
-  /** 已解锁分钟数 */
-  minutesSinceUnlock: number;
-  /** 首次检测到未锁的时间 (ISO 8601) */
-  detectedAt: string | null;
-}
+import type { UnlockReminder } from "../../../shared/types";
+
+// 类型定义统一来自 shared/types.d.ts，re-export 保持外部 import 路径不变
+export type { UnlockReminder };
 
 interface UnlockState {
   /** 首次检测到未锁的 epoch ms */

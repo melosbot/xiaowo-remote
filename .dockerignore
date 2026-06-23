@@ -6,3 +6,8 @@
 **/.env.local
 **/*.log
 .DS_Store
+tools/
+.claude/
+.agents/
+.codex/
+demo/data/

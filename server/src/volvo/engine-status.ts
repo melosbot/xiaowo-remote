@@ -1,9 +1,7 @@
-export type RemoteEngineStatus =
-  | "Unknown"
-  | "Off"
-  | "Starting"
-  | "Running"
-  | "Stopping";
+import type { RemoteEngineStatus } from "../../../shared/types";
+
+// 类型定义统一来自 shared/types.d.ts，re-export 保持外部 import 路径不变
+export type { RemoteEngineStatus };
 
 interface ProtoTimestamp {
   seconds?: string | number;

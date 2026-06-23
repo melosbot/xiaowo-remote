@@ -5,6 +5,20 @@ import {
   REST_BASE_HEADERS,
   REST_USER_AGENT,
 } from "./client-profile.js";
+import type {
+  BoundVehicle,
+  UserProfile,
+  MembershipInfo,
+  SignInStatus,
+} from "../../../shared/types";
+
+// 类型定义统一来自 shared/types.d.ts，re-export 保持外部 import 路径不变
+export type {
+  BoundVehicle,
+  UserProfile,
+  MembershipInfo,
+  SignInStatus,
+};
 
 const BASE_HEADERS: Record<string, string> = { ...REST_BASE_HEADERS };
 
@@ -14,52 +28,6 @@ export interface VolvoTokens {
   digitalvolvoAccessToken: string;
   digitalvolvoXToken: string;
   expireAt: number;
-}
-
-export interface BoundVehicle {
-  vinCode: string;
-  seriesName: string;
-  modelName: string;
-  modelYear: number;
-  [k: string]: unknown;
-}
-
-export interface UserProfile {
-  /** 姓（来自 JWT） */
-  firstName: string;
-  /** 名（来自 JWT） */
-  lastName: string;
-  /** 昵称 */
-  nickName: string;
-  /** 头像 URL */
-  headPortrait: string;
-  /** 手机号 */
-  mobile: string;
-  /** 会员 ID */
-  memberId: string;
-  /** Volvo ID */
-  vocId: string;
-}
-
-export interface MembershipInfo {
-  vTotalValue: number;
-  vRestValue: number;
-  monthValue: number;
-  expireTime: string;
-  levelTitle: string;
-  levelNumber: number;
-  levelProgress: number;
-  growthValue: number;
-  validGrowthValue: number;
-  growthValueForUpgrade: number;
-  nextLevelBeginGrowthValue: number;
-  uniqueNumberCode: string;
-  qrCodeUrl: string;
-}
-
-export interface SignInStatus {
-  signInState: boolean;
-  signInCount: number;
 }
 
 export class VolvoAPIError extends Error {}

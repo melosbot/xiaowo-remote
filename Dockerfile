@@ -4,6 +4,7 @@ FROM node:24-alpine AS web-build
 WORKDIR /build/web
 COPY web/package*.json ./
 RUN npm ci
+COPY shared/ /build/shared/
 COPY web/ ./
 ARG VITE_AMAP_KEY
 ARG VITE_AMAP_SECURITY_JS_CODE
@@ -16,6 +17,7 @@ WORKDIR /build/server
 COPY server/package*.json ./
 RUN npm ci
 COPY server/tsconfig.json ./
+COPY shared/ /build/shared/
 COPY server/src/ ./src/
 RUN npx tsc \
     && find dist -name '*.test.js' -delete \

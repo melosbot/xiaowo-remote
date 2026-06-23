@@ -19,29 +19,14 @@ import { signRequest } from "./signing.js";
 // 类型
 // ---------------------------------------------------------------------------
 
-/** 三态能力值 */
-export type CapabilityState = "supported" | "unsupported" | "unknown";
+import type {
+  CapabilityState,
+  CapabilitySource,
+  VehicleCapabilities,
+} from "../../../shared/types";
 
-/** 能力数据来源 */
-export type CapabilitySource = "remote" | "cache" | "fallback";
-
-/** 车辆远程控制能力 */
-export interface VehicleCapabilities {
-  lock: CapabilityState;
-  unlock: CapabilityState;
-  engineRemoteStart: CapabilityState;
-  flash: CapabilityState;
-  honk: CapabilityState;
-  window: CapabilityState;
-  sunroof: CapabilityState;
-  tailgate: CapabilityState;
-  preCleaning: CapabilityState;
-  updateStatus: CapabilityState;
-  /** 数据来源 */
-  source: CapabilitySource;
-  /** Unix 毫秒，从远端或缓存获取时刻 */
-  fetchedAt: number;
-}
+// 类型定义统一来自 shared/types.d.ts，re-export 保持外部 import 路径不变
+export type { CapabilityState, CapabilitySource, VehicleCapabilities };
 
 // ---------------------------------------------------------------------------
 // 缓存
