@@ -104,6 +104,8 @@
 │           ├── client-profile.ts 版本与 Header 集中配置
 │           ├── log.ts            统一日志
 │           └── demo.ts           Demo 数据
+├── shared/
+│   └── types.d.ts            前后端共享类型（VehicleStatus / BoundVehicle 等，单一来源）
 ├── demo/
 │   ├── run.sh                    本地开发脚本（start/stop/restart/rebuild/status/logs）
 │   └── data/                     运行时数据（PID、日志、会话、设置）
@@ -195,6 +197,8 @@ cd web && npm run dev         # 前端 → :5173，自动代理 API
 | `PORT` | `8787` | 监听端口 |
 | `WEB_ROOT` | `web/dist` | 前端静态文件目录 |
 | `DATA_DIR` | `./data` | 会话、设置持久化目录 |
+| `SESSION_SECRET` | 内置默认密钥（公开） | sessions.json 密码加密密钥；**生产务必设随机值**（如 `openssl rand -hex 32`），否则用源码内公开密钥 = 形同未加密 |
+| `CORS_ORIGIN` | 允许所有来源（`*`） | 逗号分隔的域名白名单；生产建议设，避免被其他站点调用本服务 |
 
 ## 检查
 
