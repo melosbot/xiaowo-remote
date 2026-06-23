@@ -18,6 +18,7 @@ RUN npm ci
 COPY server/tsconfig.json ./
 COPY server/src/ ./src/
 RUN npx tsc \
+    && find dist -name '*.test.js' -delete \
     && cp -r src/proto dist/proto \
     && rm -rf node_modules \
     && npm ci --omit=dev --no-audit --no-fund \
