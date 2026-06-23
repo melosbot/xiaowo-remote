@@ -155,6 +155,16 @@ export function destroySession(sessionId: string): void {
   }
 }
 
+/** 优雅关闭:关闭所有 session 的 gRPC 通道与 keepAlive 定时器,但不删磁盘持久化(供下次启动恢复) */
+export function shutdownAllSessions(): void {
+  for (const s of sessions.values()) {
+    clearInterval(s.keepAlive);
+    for (const ctrl of s.vehicles.values()) ctrl.close();
+  }
+  sessions.clear();
+  phoneSessions.clear();
+}
+
 /** 获取 session 对应的手机号 */
 export function getSessionPhone(sessionId: string): string | null {
   return sessions.get(sessionId)?.phone ?? null;

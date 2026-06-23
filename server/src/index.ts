@@ -18,6 +18,7 @@ import {
   restoreSessions,
   SessionError,
   getSessionPhone,
+  shutdownAllSessions,
 } from "./session.js";
 import { InvocationError } from "./volvo/grpc.js";
 import { VolvoAPIError } from "./volvo/base.js";
@@ -432,8 +433,24 @@ const PORT = Number(process.env.PORT ?? 8787);
 const HOST = process.env.HOST ?? "0.0.0.0";
 
 restoreSessions().then(() => {
-  app.listen(PORT, HOST, () => {
+  const server = app.listen(PORT, HOST, () => {
     log.startup("server", `listening on http://${HOST}:${PORT}`);
   });
 
+  // 优雅关闭:容器收到 SIGTERM(滚动更新/stop)时,停收新连接 → 等 in-flight → 关闭 gRPC
+  function shutdown(signal: string) {
+    log.warn("shutdown", `${signal} received, closing gracefully...`);
+    server.close(() => {
+      shutdownAllSessions();
+      log.warn("shutdown", "all connections closed, exit");
+      process.exit(0);
+    });
+    // 兜底:gRPC 控制指令可能耗时,8s 后仍未结束则强制退出
+    setTimeout(() => {
+      log.warn("shutdown", "graceful shutdown timeout, force exit");
+      process.exit(1);
+    }, 8000).unref();
+  }
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 });
