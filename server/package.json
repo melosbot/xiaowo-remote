@@ -7,6 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
+    "build": "tsc && cp -r src/proto dist/proto",
     "test": "vitest run"
   },
   "dependencies": {

@@ -165,6 +165,11 @@ export function shutdownAllSessions(): void {
   phoneSessions.clear();
 }
 
+/** 活跃 session 数(供 health 端点) */
+export function getActiveSessionCount(): number {
+  return sessions.size;
+}
+
 /** 获取 session 对应的手机号 */
 export function getSessionPhone(sessionId: string): string | null {
   return sessions.get(sessionId)?.phone ?? null;

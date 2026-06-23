@@ -19,6 +19,7 @@ import {
   SessionError,
   getSessionPhone,
   shutdownAllSessions,
+  getActiveSessionCount,
 } from "./session.js";
 import { InvocationError } from "./volvo/grpc.js";
 import { VolvoAPIError } from "./volvo/base.js";
@@ -137,7 +138,11 @@ async function withSession<T>(
 }
 
 app.get("/api/health", (_req, res) => {
-  res.json({ ok: true });
+  res.json({
+    ok: true,
+    uptime: Math.round(process.uptime()),
+    sessions: getActiveSessionCount(),
+  });
 });
 
 app.get("/api/account", async (req, res) => {
