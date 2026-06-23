@@ -115,9 +115,45 @@ export class VehicleBaseAPI {
       throw new VolvoAPIError(`HTTP ${res.status} ${res.statusText}`);
     }
     const json = (await res.json()) as any;
-    if (!json.success)
-      throw new VolvoAPIError(json.errMsg ?? "沃尔沃服务请求失败");
+    if (!json.success) {
+      const errMsg: string = json.errMsg ?? "";
+      // REST token 过期/无效时，强制重新登录后重试一次
+      const authErrors = ["invalid token", "token", "unauthorized", "expired", "APIG.0303"];
+      if (authErrors.some((k) => errMsg.toLowerCase().includes(k)) && !this._retrying) {
+        this._retrying = true;
+        try {
+          log.info("base", `REST auth error "${errMsg}", 重新登录后重试`);
+          await this.forceLogin();
+          return this.requestDigitalvolvo(method, url, body);
+        } finally {
+          this._retrying = false;
+        }
+      }
+      throw new VolvoAPIError(errMsg || "沃尔沃服务请求失败");
+    }
     return json;
+  }
+
+  private _retrying = false;
+
+  /** 强制重新登录，绕过 expireAt 时间守卫 */
+  private async forceLogin(): Promise<void> {
+    const savedExpireAt = this.expireAt;
+    const savedAccess = this.digitalvolvoAccessToken;
+    const savedX = this.digitalvolvoXToken;
+    this.expireAt = 0; // 绕过 login() 的时间守卫
+    this.digitalvolvoAccessToken = ""; // 避免 auth API 用旧 token
+    this.digitalvolvoXToken = "";
+
+    try {
+      await this.login();
+    } finally {
+      if (!this.digitalvolvoAccessToken) {
+        this.expireAt = savedExpireAt;
+        this.digitalvolvoAccessToken = savedAccess;
+        this.digitalvolvoXToken = savedX;
+      }
+    }
   }
 
   async login(): Promise<void> {

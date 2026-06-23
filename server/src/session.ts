@@ -18,6 +18,7 @@ interface Session {
 
 const sessions = new Map<string, Session>();
 const phoneSessions = new Map<string, string>(); // phone → sessionId
+const refreshLocks = new Map<string, Promise<void>>(); // 并发去重锁
 const KEEPALIVE_INTERVAL_MS = 1000 * 60 * 5;
 
 async function initSession(
@@ -91,8 +92,8 @@ export async function restoreSessions(): Promise<void> {
 async function keepAliveTokens(sessionId: string): Promise<void> {
   const s = sessions.get(sessionId);
   if (!s) return;
-  await s.base.login();
-  await s.base.updateToken();
+  // keepalive 也走去重锁，避免和并发请求冲突
+  await ensureFreshTokens(sessionId);
 }
 
 export function getSession(sessionId: string): Session {
@@ -112,17 +113,30 @@ export function getController(
 }
 
 export async function ensureFreshTokens(sessionId: string): Promise<void> {
-  const s = getSession(sessionId);
-  await s.base.login();
-  await s.base.updateToken();
+  // 去重：并发请求共享同一次刷新，避免重复 login() 触发 Volvo 限流
+  const inflight = refreshLocks.get(sessionId);
+  if (inflight) {
+    await inflight;
+    return;
+  }
+  const p = (async () => {
+    const s = getSession(sessionId);
+    await s.base.login();
+    await s.base.updateToken();
+  })();
+  refreshLocks.set(sessionId, p);
+  try {
+    await p;
+  } finally {
+    refreshLocks.delete(sessionId);
+  }
 }
 
 export async function validateSession(sessionId: string): Promise<boolean> {
   const s = sessions.get(sessionId);
   if (!s) return false;
   try {
-    await s.base.login();
-    await s.base.updateToken();
+    await ensureFreshTokens(sessionId);
     return true;
   } catch (err) {
     log.warn("session", `validate failed for ${sessionId.slice(0, 8)}: ${(err as Error).message}`);
