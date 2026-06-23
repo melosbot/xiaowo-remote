@@ -48,8 +48,12 @@ app.use(helmet({
   contentSecurityPolicy: false, // PWA 由 Vite 注入 CSP meta，服务端不覆盖
   crossOriginEmbedderPolicy: false,
 }));
+const corsOrigin = process.env.CORS_ORIGIN;
 app.use(cors({
-  origin: process.env.CORS_ORIGIN ?? true, // 默认允许所有同源，设 CORS_ORIGIN 限制
+  // 未配则允许所有(开发友好);生产可设 CORS_ORIGIN 为逗号分隔的域名白名单
+  origin: corsOrigin
+    ? corsOrigin.split(",").map((s) => s.trim()).filter(Boolean)
+    : true,
   methods: ["GET", "POST"],
   maxAge: 86400,
 }));
