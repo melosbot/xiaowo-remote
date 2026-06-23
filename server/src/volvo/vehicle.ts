@@ -399,6 +399,9 @@ export class VehicleController {
   }
 
   private capCache: VehicleCapabilities | null = null;
+  /** 状态短时缓存,避免短时间内重复打 10 路 gRPC */
+  private statusCache: { data: VehicleStatus; at: number } | null = null;
+  private static readonly STATUS_TTL_MS = 15_000;
 
   /**
    * 获取 VIN 能力（优先从缓存，否则从远端拉取）。
@@ -419,7 +422,7 @@ export class VehicleController {
     return this.capCache ?? getCachedCapabilities(this.vin) ?? null;
   }
 
-  async getStatus(): Promise<VehicleStatus> {
+  private async fetchStatus(): Promise<VehicleStatus> {
     const vin = this.vin;
     const failures: string[] = [];
 
@@ -771,6 +774,21 @@ export class VehicleController {
     };
   }
 
+  async getStatus(): Promise<VehicleStatus> {
+    const c = this.statusCache;
+    if (c && Date.now() - c.at < VehicleController.STATUS_TTL_MS) {
+      return c.data;
+    }
+    const status = await this.fetchStatus();
+    this.statusCache = { data: status, at: Date.now() };
+    return status;
+  }
+
+  /** 控制操作 / 主动刷新后失效,下次 getStatus 强制重拉 */
+  private invalidateStatusCache(): void {
+    this.statusCache = null;
+  }
+
   // ---- 带 capability 校验的控制方法 ----
 
   private guard(
@@ -786,6 +804,7 @@ export class VehicleController {
    * 与官方 APK 行为对齐：远程控制后调用 UpdateStatus 让车辆上传最新状态。
    */
   private triggerStatusRefresh(): void {
+    this.invalidateStatusCache();
     this.grpc.updateStatus(this.vin).catch((err) => {
       log.warn("vehicle", `[updateStatus] refresh failed for ${this.vin.slice(-6)}: ${(err as Error).message}`);
     });
@@ -793,6 +812,7 @@ export class VehicleController {
 
   async refreshFromCar(): Promise<void> {
     this.guard("updateStatus", "主动刷新");
+    this.invalidateStatusCache();
     await this.grpc.updateStatus(this.vin);
   }
 
