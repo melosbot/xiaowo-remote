@@ -366,11 +366,27 @@ export function clearVehicleStatusCache(): void {
 
 export class ApiError extends Error {}
 
+/** 请求超时:略大于后端 gRPC 的 30s,避免误杀控制指令 */
+const REQUEST_TIMEOUT_MS = 35_000
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-  })
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  let res: Response
+  try {
+    res = await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    })
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new ApiError("请求超时，请稍后重试")
+    }
+    throw new ApiError(err instanceof Error ? err.message : "网络请求失败")
+  } finally {
+    clearTimeout(timer)
+  }
   const data = (await res.json().catch(() => ({}))) as { error?: string }
   if (!res.ok) {
     throw new ApiError(data.error ?? `服务请求失败（HTTP ${res.status}）`)
