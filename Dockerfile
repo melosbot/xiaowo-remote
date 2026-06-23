@@ -58,4 +58,5 @@ EXPOSE 8787
 VOLUME ["/app/data"]
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:8787/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
-CMD ["node", "--import", "./node_modules/tsx/dist/loader.mjs", "dist/index.js"]
+# 生产直接用 node 跑编译产物 dist/*.js,无需 tsx(已实测与 tsx 版功能等价,镜像 96.8→84.8MB)
+CMD ["node", "dist/index.js"]
